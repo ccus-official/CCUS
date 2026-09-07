@@ -1,0 +1,1042 @@
+/* =========================================================
+   GLOBAL RESET & VARIABLES
+========================================================= */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+:root {
+  /* Halluuwwan Ijoo (Gold Premium Palette) */
+  --gold: #d4af37;
+  --gold-light: #fef9e7;
+  --gold-soft: #f39c12;
+  --gold-primary-grad: linear-gradient(135deg, #f39c12 0%, #d4af37 100%);
+
+  /* Halluu Submit Button (Magariisa) */
+  --green-submit-grad: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+
+  /* Halluu Neutral */
+  --dark: #1e1e24;
+  --text: #2d3436;
+  --muted: #8898aa;
+  --light: #f8f9fe;
+  --white: #ffffff;
+  --border: #edf2f7;
+
+  /* Halluu Status (Pending/Rejected: Diimaa, Successful/Approved: Magariisa) */
+  --green: #2ecc71;
+  --green-light: #e8f8f5;
+  --red: #e74c3c;
+  --red-light: #fadbd8;
+
+  /* Dynamic Shadows & Glassmorphism */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 5px 15px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 25px rgba(46, 204, 113, 0.25);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+}
+
+/* =========================================================
+   HTML / BODY & APP LAYOUT
+========================================================= */
+html {
+  scroll-behavior: smooth;
+  height: 100%;
+}
+
+body {
+  background: #eef2f5;
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  width: 100%;
+  max-width: 430px;
+  min-height: 100vh;
+  margin: 0 auto;
+  background: var(--white);
+  position: relative;
+  overflow-x: clip;
+  padding-bottom: 90px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.08);
+}
+
+/* =========================================================
+   COMMON ELEMENTS & UTILITIES
+========================================================= */
+.hidden {
+  display: none !important;
+}
+
+button {
+  border: none;
+  outline: none;
+  cursor: pointer;
+  font-family: inherit;
+  user-select: none;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+input, select {
+  outline: none;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+button, .action-btn, .feature-card, .profile-menu, .wallet-action, .amount-btn, .deposit-payment-method, .nav-item {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   AUTH PAGES
+========================================================= */
+.auth-page {
+  min-height: 100vh;
+  padding: 50px 24px 30px;
+  background: radial-gradient(circle at top, #fffdf0 0%, #ffffff 80%);
+}
+
+.auth-logo {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.logo-circle {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--gold-primary-grad);
+  color: var(--white);
+  font-size: 36px;
+  font-weight: bold;
+  box-shadow: 0 10px 25px rgba(243, 156, 18, 0.2);
+}
+
+.auth-logo h1 {
+  color: var(--dark);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.auth-logo p {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.auth-card {
+  background: var(--white);
+  border-radius: 24px;
+  padding: 28px 22px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border);
+}
+
+.auth-card h2 {
+  font-size: 22px;
+  color: var(--dark);
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+
+.auth-subtitle {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+/* =========================================================
+   INPUTS & FORMS
+========================================================= */
+.input-group {
+  margin-bottom: 18px;
+}
+
+.input-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dark);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.input-group label span {
+  color: var(--muted);
+  font-weight: normal;
+  text-transform: none;
+}
+
+.input-group input,
+.personal-field select {
+  width: 100%;
+  height: 50px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 0 16px;
+  font-size: 14px;
+  color: var(--dark);
+  background: #f8fafc;
+}
+
+.input-group input:focus,
+.personal-field select:focus {
+  border-color: var(--green);
+  background: var(--white);
+  box-shadow: 0 0 0 4px rgba(46, 204, 113, 0.15);
+}
+
+.input-group input::placeholder {
+  color: #a0aec0;
+}
+
+/* =========================================================
+   SUBMIT & PRIMARY BUTTONS (Magariisa)
+========================================================= */
+.primary-btn, 
+button[type="submit"],
+.submit-btn {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 14px;
+  background: var(--green-submit-grad) !important;
+  color: var(--white) !important;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.primary-btn:hover, 
+button[type="submit"]:hover,
+.submit-btn:hover {
+  opacity: 0.95;
+  transform: translateY(-1px);
+}
+
+.primary-btn:active, 
+button[type="submit"]:active,
+.submit-btn:active {
+  transform: translateY(1px);
+}
+
+.primary-btn:disabled, 
+button[type="submit"]:disabled {
+  background: #cbd5e1 !important;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.secondary-btn {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 12px;
+  border-radius: 14px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.secondary-btn:hover {
+  background: #e2e8f0;
+}
+
+.forgot-btn {
+  display: block;
+  margin: 0 0 18px auto;
+  background: transparent;
+  color: var(--gold-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.auth-switch {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 24px;
+}
+
+.auth-switch button {
+  background: transparent;
+  color: var(--gold-soft);
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+/* =========================================================
+   HOME HEADER & BALANCE CARD
+========================================================= */
+.header {
+  background: var(--gold-primary-grad);
+  padding: 28px 20px 30px;
+  color: var(--white);
+  border-bottom-left-radius: 28px;
+  border-bottom-right-radius: 28px;
+  box-shadow: var(--shadow-md);
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.welcome {
+  font-size: 13px;
+  opacity: 0.9;
+  letter-spacing: 0.3px;
+}
+
+.header h1 {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.notification-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(8px);
+  color: var(--white);
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.balance-card {
+  background: var(--white);
+  margin-top: 22px;
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.balance-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.balance-item:first-child {
+  border-right: 1px solid var(--border);
+  padding-right: 12px;
+}
+
+.balance-item p {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.balance-item h2 {
+  font-size: 20px;
+  color: var(--dark);
+}
+
+.balance-item h2 span {
+  font-weight: 800;
+  color: var(--gold-soft);
+}
+
+/* =========================================================
+   SECTIONS & QUICK ACTIONS
+========================================================= */
+.section {
+  padding: 24px 20px 0;
+}
+
+.section-title {
+  color: var(--dark);
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 14px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.streak {
+  color: var(--gold-soft);
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--gold-light);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.action-btn {
+  background: var(--light);
+  border-radius: 18px;
+  padding: 16px 8px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+.action-btn:hover {
+  background: var(--gold-light);
+  border-color: rgba(243, 156, 18, 0.3);
+  transform: translateY(-2px);
+}
+
+.action-btn span {
+  display: block;
+  font-size: 26px;
+  margin-bottom: 6px;
+}
+
+.action-btn small {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   DAILY CHECK-IN
+========================================================= */
+.checkin-card {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+.checkin-card > p {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--light);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.day.active {
+  background: var(--gold-primary-grad);
+  color: var(--white);
+  box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+}
+
+/* =========================================================
+   FEATURE CARDS & ANNOUNCEMENT
+========================================================= */
+.feature-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.feature-card {
+  min-height: 140px;
+  padding: 20px;
+  border-radius: 20px;
+  color: var(--white);
+  background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: var(--shadow-md);
+}
+
+.feature-card:nth-child(even) {
+  background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+}
+
+.feature-icon {
+  font-size: 28px;
+}
+
+.feature-card h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.feature-card p {
+  font-size: 11px;
+  opacity: 0.8;
+  line-height: 1.4;
+}
+
+.announcement {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--gold-light);
+  border: 1px solid rgba(243, 156, 18, 0.2);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.announcement-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: var(--white);
+  font-size: 22px;
+  box-shadow: var(--shadow-sm);
+}
+
+.announcement h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--dark);
+  margin-bottom: 2px;
+}
+
+.announcement p {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* =========================================================
+   SIMPLE PAGES & CARDS
+========================================================= */
+.simple-page {
+  min-height: 100vh;
+  background: var(--light);
+}
+
+.simple-header {
+  height: 65px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 20px;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.simple-header h2 {
+  font-size: 18px;
+  color: var(--dark);
+  font-weight: 700;
+}
+
+.back-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--light);
+  color: var(--dark);
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.simple-content {
+  padding: 20px;
+}
+
+.simple-card {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+.simple-card h3 {
+  color: var(--dark);
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.simple-card p {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* =========================================================
+   WALLET PAGE
+========================================================= */
+.wallet-balance-card {
+  background: var(--white);
+  border-radius: 22px;
+  padding: 22px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+
+.wallet-balance-item span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.wallet-balance-item strong {
+  display: block;
+  color: var(--dark);
+  font-size: 18px;
+}
+
+.wallet-divider {
+  width: 1px;
+  height: 45px;
+  background: var(--border);
+}
+
+.wallet-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.wallet-action {
+  background: var(--white);
+  border-radius: 20px;
+  padding: 20px 14px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+.wallet-action:hover {
+  border-color: var(--gold);
+  transform: translateY(-2px);
+}
+
+.wallet-action span {
+  display: block;
+  font-size: 30px;
+  margin-bottom: 8px;
+}
+
+.wallet-action strong {
+  display: block;
+  color: var(--dark);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.wallet-action small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* =========================================================
+   PROFILE PAGE & MENUS
+========================================================= */
+.profile-header {
+  position: relative;
+  text-align: center;
+  padding: 30px 20px 30px;
+  background: var(--gold-primary-grad);
+  color: var(--white);
+  border-bottom-left-radius: 28px;
+  border-bottom-right-radius: 28px;
+}
+
+.profile-header .back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--white);
+}
+
+.profile-avatar {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  box-shadow: var(--shadow-md);
+}
+
+.profile-menu {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--white);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+
+.menu-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.menu-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--gold-light);
+  color: var(--gold-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.profile-menu h3 {
+  color: var(--dark);
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.profile-menu p {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.info-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.info-row strong {
+  color: var(--dark);
+  font-size: 12px;
+}
+
+/* =========================================================
+   RECHARGE, AMOUNTS & PAYMENT METHODS
+========================================================= */
+.amount-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.amount-btn {
+  padding: 16px 10px;
+  border-radius: 16px;
+  background: var(--light);
+  color: var(--dark);
+  font-size: 14px;
+  font-weight: 700;
+  border: 1.5px solid var(--border);
+}
+
+.amount-btn.active {
+  background: var(--gold-light);
+  color: var(--gold-soft);
+  border-color: var(--gold);
+  box-shadow: 0 4px 12px rgba(243, 156, 18, 0.15);
+}
+
+#depositPaymentMethods .deposit-payment-method {
+  width: 100%;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: var(--white);
+  border: 1.5px solid var(--gold);
+  border-radius: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+#depositPaymentMethods .deposit-payment-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--gold-light);
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#depositPaymentMethods .deposit-payment-info strong {
+  font-size: 15px;
+  color: var(--dark);
+  font-weight: 700;
+}
+
+#depositPaymentMethods .deposit-payment-info small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* =========================================================
+   TRANSACTION & RECHARGE / WITHDRAWAL HISTORY STYLING
+========================================================= */
+.history-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+  border-left: 5px solid var(--muted);
+  transition: all 0.25s ease;
+}
+
+.history-info strong {
+  color: var(--dark);
+  font-size: 14px;
+  font-weight: 700;
+  display: block;
+}
+
+.history-info span {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.history-info small {
+  color: var(--muted);
+  font-size: 11px;
+  display: block;
+  margin-top: 2px;
+}
+
+.history-right {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.history-right > strong {
+  font-size: 15px;
+  color: var(--dark);
+  font-weight: 800;
+}
+
+.history-status {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Pending & Rejected: Halluu Diimaa */
+.history-status.pending,
+.history-status.rejected,
+.status-pending,
+.status-rejected {
+  background: var(--red-light) !important;
+  color: var(--red) !important;
+  border: 1px solid rgba(231, 76, 60, 0.3) !important;
+}
+
+.history-status.pending::before,
+.history-status.rejected::before,
+.status-pending::before,
+.status-rejected::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  margin-right: 6px;
+}
+
+.history-item:has(.pending),
+.history-item:has(.rejected),
+.history-item:has(.status-pending),
+.history-item:has(.status-rejected),
+.history-item.pending,
+.history-item.rejected {
+  border-left-color: var(--red) !important;
+  background: linear-gradient(90deg, rgba(231, 76, 60, 0.03) 0%, var(--white) 100%);
+}
+
+/* Approved & Successful: Halluu Magariisa */
+.history-status.approved,
+.history-status.successful,
+.status-approved,
+.status-successful {
+  background: var(--green-light) !important;
+  color: var(--green) !important;
+  border: 1px solid rgba(46, 204, 113, 0.3) !important;
+}
+
+.history-status.approved::before,
+.history-status.successful::before,
+.status-approved::before,
+.status-successful::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-right: 6px;
+}
+
+.history-item:has(.approved),
+.history-item:has(.successful),
+.history-item:has(.status-approved),
+.history-item:has(.status-successful),
+.history-item.approved,
+.history-item.successful {
+  border-left-color: var(--green) !important;
+  background: linear-gradient(90deg, rgba(46, 204, 113, 0.03) 0%, var(--white) 100%);
+}
+
+/* =========================================================
+   BOTTOM NAVIGATION
+========================================================= */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  height: 70px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  z-index: 100;
+}
+
+.nav-item {
+  flex: 1;
+  height: 100%;
+  background: transparent;
+  color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 12px;
+}
+
+.nav-item span {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.nav-item small {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.nav-item.active {
+  color: var(--gold-soft);
+}
+
+/* =========================================================
+   RESPONSIVE DESIGN
+========================================================= */
+@media (max-width: 380px) {
+  .actions {
+    gap: 8px;
+  }
+  
+  .action-btn {
+    padding: 12px 4px;
+  }
+  
+  .action-btn span {
+    font-size: 22px;
+  }
+
+  .balance-item h2 {
+    font-size: 17px;
+  }
+}

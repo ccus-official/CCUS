@@ -1,0 +1,2621 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  >
+
+  <meta
+    name="theme-color"
+    content="#f0a500"
+  >
+
+  <meta
+    name="description"
+    content="CCUS Digital Rewards and Community Platform"
+  >
+
+  <title>CCUS</title>
+
+  <link rel="stylesheet" href="./style.css">
+</head>
+
+<body>
+
+  <div class="app">
+
+    <!-- =====================================================
+         LOGIN PAGE
+    ====================================================== -->
+
+    <section id="loginPage" class="auth-page">
+
+      <div class="auth-logo">
+
+        <div class="logo-circle">
+          C
+        </div>
+
+        <h1>CCUS</h1>
+
+        <p>
+          Digital Rewards & Community Platform
+        </p>
+
+      </div>
+
+
+      <div class="auth-card">
+
+        <h2>
+          Welcome Back
+        </h2>
+
+        <p class="auth-subtitle">
+          Login to continue to your CCUS account.
+        </p>
+
+
+        <div class="input-group">
+
+          <label for="loginEmail">
+            Email
+          </label>
+
+          <input
+            type="email"
+            id="loginEmail"
+            name="loginEmail"
+            placeholder="Enter your email"
+            autocomplete="email"
+          >
+
+        </div>
+
+
+        <div class="input-group">
+
+          <label for="loginPassword">
+            Password
+          </label>
+
+          <input
+            type="password"
+            id="loginPassword"
+            name="loginPassword"
+            placeholder="Enter your password"
+            autocomplete="current-password"
+          >
+
+        </div>
+
+
+        <button
+          type="button"
+          class="forgot-btn"
+          onclick="window.forgotPassword()"
+        >
+          Forgot Password?
+        </button>
+
+
+        <button
+          type="button"
+          class="primary-btn"
+          onclick="window.loginUser()"
+        >
+          Login
+        </button>
+
+
+        <div
+          id="loginMessage"
+          class="message"
+          aria-live="polite"
+        ></div>
+
+
+        <div class="auth-switch">
+
+          Don't have an account?
+
+          <button
+            type="button"
+            onclick="window.showSignup()"
+          >
+            Sign Up
+          </button>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         SIGNUP PAGE
+    ====================================================== -->
+
+    <section
+      id="signupPage"
+      class="auth-page hidden"
+    >
+
+      <div class="auth-logo">
+
+        <div class="logo-circle">
+          C
+        </div>
+
+        <h1>
+          CCUS
+        </h1>
+
+        <p>
+          Create your account
+        </p>
+
+      </div>
+
+
+      <div class="auth-card">
+
+        <h2>
+          Create Account
+        </h2>
+
+        <p class="auth-subtitle">
+          Join the CCUS community today.
+        </p>
+
+
+        <div class="input-group">
+
+          <label for="signupName">
+            Full Name
+          </label>
+
+          <input
+            type="text"
+            id="signupName"
+            name="signupName"
+            placeholder="Enter your full name"
+            autocomplete="name"
+          >
+
+        </div>
+
+
+        <div class="input-group">
+
+          <label for="signupEmail">
+            Email
+          </label>
+
+          <input
+            type="email"
+            id="signupEmail"
+            name="signupEmail"
+            placeholder="Enter your email"
+            autocomplete="email"
+          >
+
+        </div>
+
+
+        <div class="input-group">
+
+          <label for="signupPassword">
+            Password
+          </label>
+
+          <input
+            type="password"
+            id="signupPassword"
+            name="signupPassword"
+            placeholder="Create a password"
+            autocomplete="new-password"
+          >
+
+        </div>
+
+
+        <div class="input-group">
+
+          <label for="signupConfirmPassword">
+            Confirm Password
+          </label>
+
+          <input
+            type="password"
+            id="signupConfirmPassword"
+            name="signupConfirmPassword"
+            placeholder="Confirm your password"
+            autocomplete="new-password"
+          >
+
+        </div>
+
+
+        <div class="input-group">
+
+          <label for="referralCode">
+            Referral Code
+            <span>(Optional)</span>
+          </label>
+
+          <input
+            type="text"
+            id="referralCode"
+            name="referralCode"
+            placeholder="Enter referral code"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <button
+          type="button"
+          class="primary-btn"
+          onclick="window.signupUser()"
+        >
+          Create Account
+        </button>
+
+
+        <div
+          id="signupMessage"
+          class="message"
+          aria-live="polite"
+        ></div>
+
+
+        <div class="auth-switch">
+
+          Already have an account?
+
+          <button
+            type="button"
+            onclick="window.showLogin()"
+          >
+            Login
+          </button>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         HOME PAGE
+    ====================================================== -->
+
+    <section
+      id="homePage"
+      class="hidden"
+    >
+
+      <header class="header">
+
+        <div class="header-top">
+
+          <div>
+
+            <p class="welcome">
+              Welcome back
+            </p>
+
+            <h1>
+              CCUS
+            </h1>
+
+          </div>
+
+
+          <!-- NOTIFICATION BUTTON -->
+
+          <button
+            type="button"
+            id="notificationButton"
+            class="notification-btn"
+            onclick="window.openPage('announcements')"
+            aria-label="Notifications"
+            style="position:relative;"
+          >
+
+            🔔
+
+            <!-- NEW ANNOUNCEMENT BADGE -->
+
+            <span
+              id="announcementNotificationBadge"
+              class="announcement-notification-badge hidden"
+              style="
+                position:absolute;
+                top:-4px;
+                right:-4px;
+                min-width:18px;
+                height:18px;
+                padding:0 5px;
+                border-radius:50px;
+                background:#e53935;
+                color:#fff;
+                font-size:11px;
+                font-weight:700;
+                line-height:18px;
+                text-align:center;
+                box-sizing:border-box;
+                border:2px solid #fff;
+              "
+            >
+              0
+            </span>
+
+          </button>
+
+        </div>
+
+
+        <!-- BALANCE -->
+
+        <div class="balance-card">
+
+          <div class="balance-columns">
+
+            <div class="balance-item">
+
+              <p>
+                Total Balance
+              </p>
+
+              <h2>
+                ETB
+                <span id="totalBalance">
+                  0.00
+                </span>
+              </h2>
+
+            </div>
+
+
+            <div class="balance-item">
+
+              <p>
+                Total Recharge
+              </p>
+
+              <h2>
+                ETB
+                <span id="totalRecharge">
+                  0.00
+                </span>
+              </h2>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </header>
+
+
+      <!-- ===================================================
+           QUICK ACTIONS
+      ==================================================== -->
+
+      <div class="section">
+
+        <h2 class="section-title">
+          Quick Actions
+        </h2>
+
+
+        <div class="actions">
+
+          <button
+            type="button"
+            class="action-btn"
+            onclick="window.openPage('wallet')"
+          >
+            <span>💰</span>
+            <small>Wallet</small>
+          </button>
+
+
+          <button
+            type="button"
+            class="action-btn"
+            onclick="window.openPage('deposit')"
+          >
+            <span>➕</span>
+            <small>Deposit</small>
+          </button>
+
+
+          <button
+            type="button"
+            class="action-btn"
+            onclick="window.openPage('withdraw')"
+          >
+            <span>💸</span>
+            <small>Withdraw</small>
+          </button>
+
+
+          <button
+            type="button"
+            class="action-btn"
+            onclick="window.openPage('vip')"
+          >
+            <span>🎁</span>
+            <small>Rewards</small>
+          </button>
+
+
+          <button
+            type="button"
+            class="action-btn"
+            onclick="window.openPage('tasks')"
+          >
+            <span>✅</span>
+            <small>Tasks</small>
+          </button>
+
+
+          <button
+            type="button"
+            class="action-btn"
+            onclick="window.openPage('referral')"
+          >
+            <span>👥</span>
+            <small>Invite</small>
+          </button>
+
+
+          <button
+            type="button"
+            class="action-btn"
+            onclick="window.openPage('vip')"
+          >
+            <span>👑</span>
+            <small>VIP</small>
+          </button>
+
+
+          <button
+            type="button"
+            class="action-btn"
+            onclick="window.openPage('profile')"
+          >
+            <span>⋯</span>
+            <small>More</small>
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- ===================================================
+           FEATURES
+      ==================================================== -->
+
+      <div class="section">
+
+        <h2 class="section-title">
+          Explore CCUS
+        </h2>
+
+
+        <div class="feature-grid">
+
+          <button
+            type="button"
+            class="feature-card"
+            onclick="window.openPage('tasks')"
+          >
+
+            <span class="feature-icon">
+              📋
+            </span>
+
+            <h3>
+              Tasks
+            </h3>
+
+            <p>
+              Complete daily tasks and claim rewards.
+            </p>
+
+          </button>
+
+
+          <button
+            type="button"
+            class="feature-card"
+            onclick="window.openPage('vip')"
+          >
+
+            <span class="feature-icon">
+              🎁
+            </span>
+
+            <h3>
+              Rewards
+            </h3>
+
+            <p>
+              Discover rewards and engagement activities.
+            </p>
+
+          </button>
+
+
+          <button
+            type="button"
+            class="feature-card"
+            onclick="window.openPage('referral')"
+          >
+
+            <span class="feature-icon">
+              👥
+            </span>
+
+            <h3>
+              Team
+            </h3>
+
+            <p>
+              Invite friends and earn referral commissions.
+            </p>
+
+          </button>
+
+
+          <button
+            type="button"
+            class="feature-card"
+            onclick="window.openPage('vip')"
+          >
+
+            <span class="feature-icon">
+              👑
+            </span>
+
+            <h3>
+              VIP
+            </h3>
+
+            <p>
+              View available VIP packages and rewards.
+            </p>
+
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <!-- ===================================================
+           ANNOUNCEMENT SECTION
+      ==================================================== -->
+
+      <div class="section">
+
+        <h2 class="section-title">
+          Announcement
+        </h2>
+
+
+        <button
+          type="button"
+          class="announcement"
+          onclick="window.openPage('announcements')"
+          aria-label="Open announcements"
+          style="position:relative;"
+        >
+
+          <div class="announcement-icon">
+            📢
+          </div>
+
+
+          <div class="announcement-content">
+
+            <h3 id="homeAnnouncementTitle">
+              Welcome to CCUS
+            </h3>
+
+            <p id="homeAnnouncement">
+              Stay updated with the latest CCUS news and announcements.
+            </p>
+
+          </div>
+
+
+          <div class="announcement-arrow">
+            ›
+          </div>
+
+
+          <!-- SMALL NEW BADGE -->
+
+          <span
+            id="homeAnnouncementBadge"
+            class="hidden"
+            style="
+              position:absolute;
+              top:8px;
+              right:10px;
+              background:#e53935;
+              color:#fff;
+              border-radius:20px;
+              padding:3px 7px;
+              font-size:10px;
+              font-weight:700;
+            "
+          >
+            NEW
+          </span>
+
+        </button>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         ANNOUNCEMENTS PAGE
+    ====================================================== -->
+
+    <section
+      id="announcementsPage"
+      class="simple-page hidden"
+    >
+
+      <div class="simple-header">
+
+        <button
+          type="button"
+          class="back-btn"
+          onclick="window.openPage('home')"
+        >
+          ←
+        </button>
+
+        <h2>
+          Announcements
+        </h2>
+
+      </div>
+
+
+      <div class="simple-content">
+
+        <div
+          id="announcementContainer"
+          class="announcement-list"
+          aria-live="polite"
+        >
+
+          <p
+            style="
+              text-align:center;
+              color:#777;
+              padding:20px;
+            "
+          >
+            Loading announcements...
+          </p>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         TASKS PAGE
+    ====================================================== -->
+
+    <section
+      id="tasksPage"
+      class="simple-page hidden"
+    >
+
+      <div class="simple-header">
+
+        <button
+          type="button"
+          class="back-btn"
+          onclick="window.openPage('home')"
+        >
+          ←
+        </button>
+
+        <h2>
+          Daily Tasks
+        </h2>
+
+      </div>
+
+
+      <div class="simple-content">
+
+        <div
+          id="taskStatusCard"
+          class="simple-card"
+        >
+
+          <div class="large-icon">
+            📋
+          </div>
+
+          <h3 id="taskStatusTitle">
+            Daily Tasks
+          </h3>
+
+          <p id="taskStatusMessage">
+            Daily tasks are available here.
+          </p>
+
+        </div>
+
+
+        <div
+          id="taskListContainer"
+          class="task-list"
+        ></div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         WALLET PAGE
+    ====================================================== -->
+
+    <section
+      id="walletPage"
+      class="simple-page hidden"
+    >
+
+      <div class="simple-header">
+
+        <button
+          type="button"
+          class="back-btn"
+          onclick="window.openPage('home')"
+        >
+          ←
+        </button>
+
+        <h2>
+          Wallet
+        </h2>
+
+      </div>
+
+
+      <div class="simple-content">
+
+        <div class="wallet-balance-card">
+
+          <div class="wallet-balance-item">
+
+            <span>
+              Total Balance
+            </span>
+
+            <strong>
+              ETB
+              <b id="walletTotalBalance">
+                0.00
+              </b>
+            </strong>
+
+          </div>
+
+
+          <div class="wallet-divider"></div>
+
+
+          <div class="wallet-balance-item">
+
+            <span>
+              Total Recharge
+            </span>
+
+            <strong>
+              ETB
+              <b id="walletTotalRecharge">
+                0.00
+              </b>
+            </strong>
+
+          </div>
+
+        </div>
+
+
+        <div class="wallet-actions">
+
+          <button
+            type="button"
+            class="wallet-action"
+            onclick="window.openPage('deposit')"
+          >
+
+            <span>
+              ➕
+            </span>
+
+            <strong>
+              Deposit
+            </strong>
+
+            <small>
+              Recharge wallet
+            </small>
+
+          </button>
+
+
+          <button
+            type="button"
+            class="wallet-action"
+            onclick="window.openPage('withdraw')"
+          >
+
+            <span>
+              💸
+            </span>
+
+            <strong>
+              Withdraw
+            </strong>
+
+            <small>
+              Withdraw funds
+            </small>
+
+          </button>
+
+        </div>
+
+
+        <h2 class="wallet-section-title">
+          Recharge History
+        </h2>
+
+
+        <div
+          id="rechargeHistory"
+          class="recharge-history"
+          aria-live="polite"
+        >
+
+          <div class="empty-transactions">
+
+            <div>
+              📄
+            </div>
+
+            <h3>
+              No Transactions Yet
+            </h3>
+
+            <p>
+              Your recharge transactions will appear here.
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <h2 class="wallet-section-title">
+          Withdraw History
+        </h2>
+
+
+        <div
+          id="withdrawHistory"
+          class="recharge-history"
+          aria-live="polite"
+        >
+
+          <div class="empty-transactions">
+
+            <div>
+              💸
+            </div>
+
+            <h3>
+              No Withdrawal Yet
+            </h3>
+
+            <p>
+              Your withdrawal history will appear here.
+            </p>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         WITHDRAW PAGE
+    ====================================================== -->
+
+    <section
+      id="withdrawPage"
+      class="simple-page hidden"
+    >
+
+      <div class="simple-header">
+
+        <button
+          type="button"
+          class="back-btn"
+          onclick="window.openPage('wallet')"
+        >
+          ←
+        </button>
+
+        <h2>
+          Withdraw
+        </h2>
+
+      </div>
+
+
+      <div class="simple-content">
+
+        <div
+          class="simple-card withdraw-balance-card"
+        >
+
+          <span>
+            Total Balance
+          </span>
+
+          <strong>
+            ETB
+            <b id="withdrawTotalBalance">
+              0.00
+            </b>
+          </strong>
+
+          <p class="small-note">
+            The withdrawal amount is reserved from Total Balance when submitted and remains Pending until Admin review.
+          </p>
+
+        </div>
+
+
+        <div class="simple-card">
+
+          <h3>
+            Select Amount
+          </h3>
+
+          <p>
+            Choose the amount you want to withdraw.
+          </p>
+
+
+          <div
+            id="withdrawAmountList"
+            class="amount-grid"
+          ></div>
+
+
+          <div class="input-group recharge-input">
+
+            <label for="withdrawAmount">
+              Custom Amount
+            </label>
+
+            <input
+              type="number"
+              id="withdrawAmount"
+              name="withdrawAmount"
+              placeholder="Enter amount"
+              min="1"
+              step="0.01"
+              inputmode="decimal"
+            >
+
+          </div>
+
+
+          <div class="input-group">
+
+            <label for="withdrawPassword">
+              Password
+            </label>
+
+            <input
+              type="password"
+              id="withdrawPassword"
+              name="withdrawPassword"
+              placeholder="Enter your login password"
+              autocomplete="current-password"
+            >
+
+          </div>
+
+
+          <button
+            type="button"
+            class="primary-btn"
+            id="submitWithdrawBtn"
+            onclick="window.submitWithdraw()"
+          >
+            Submit
+          </button>
+
+
+          <p
+            id="withdrawMessage"
+            class="admin-message"
+            aria-live="polite"
+          ></p>
+
+        </div>
+
+
+        <div
+          id="withdrawPending"
+          class="simple-card recharge-success hidden"
+        >
+
+          <div class="success-icon">
+            ✓
+          </div>
+
+          <h3>
+            Withdrawal Submitted
+          </h3>
+
+          <p>
+            Your withdrawal request has been submitted successfully.
+          </p>
+
+          <div class="pending-box">
+
+            <span>
+              Status
+            </span>
+
+            <strong>
+              Pending
+            </strong>
+
+          </div>
+
+          <p class="small-note">
+            Your withdrawal remains Pending until Admin reviews and approves it.
+          </p>
+
+
+          <button
+            type="button"
+            class="primary-btn"
+            onclick="window.openPage('wallet')"
+          >
+            Back to Wallet
+          </button>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         DEPOSIT PAGE
+    ====================================================== -->
+
+    <section
+      id="depositPage"
+      class="simple-page hidden"
+    >
+
+      <div class="simple-header">
+
+        <button
+          type="button"
+          class="back-btn"
+          onclick="window.openPage('wallet')"
+        >
+          ←
+        </button>
+
+        <h2>
+          Recharge
+        </h2>
+
+      </div>
+
+
+      <div class="simple-content">
+
+        <div
+          id="rechargeStep1"
+          class="recharge-step"
+        >
+
+          <div class="simple-card">
+
+            <h3>
+              Recharge Amount
+            </h3>
+
+            <p>
+              Select an amount or enter a custom amount.
+            </p>
+
+
+            <div
+              id="rechargeAmountList"
+              class="amount-grid"
+            ></div>
+
+
+            <div class="input-group recharge-input">
+
+              <label for="rechargeAmount">
+                Custom Amount
+              </label>
+
+              <input
+                type="number"
+                id="rechargeAmount"
+                name="rechargeAmount"
+                placeholder="Enter amount"
+                min="1"
+                step="0.01"
+                inputmode="decimal"
+              >
+
+            </div>
+
+
+            <button
+              type="button"
+              class="primary-btn"
+              id="goToPaymentMethodBtn"
+              onclick="window.goToPaymentMethod()"
+            >
+              Next
+            </button>
+
+          </div>
+
+        </div>
+
+
+        <div
+          id="rechargeStep2"
+          class="recharge-step hidden"
+        >
+
+          <div class="simple-card">
+
+            <h3>
+              Select Payment Method
+            </h3>
+
+            <p>
+              Choose your preferred payment method.
+            </p>
+
+
+            <div
+              id="depositPaymentMethods"
+            ></div>
+
+
+            <div class="selected-amount">
+
+              <span>
+                Amount to Transfer
+              </span>
+
+              <strong id="transferAmount">
+                ETB 0.00
+              </strong>
+
+            </div>
+
+
+            <button
+              type="button"
+              class="primary-btn"
+              id="goToPaymentDetailsBtn"
+              onclick="window.goToPaymentDetails()"
+            >
+              Continue
+            </button>
+
+
+            <button
+              type="button"
+              class="secondary-btn"
+              onclick="window.backToAmountStep()"
+            >
+              Back
+            </button>
+
+          </div>
+
+        </div>
+
+
+        <div
+          id="rechargeStep3"
+          class="recharge-step hidden"
+        >
+
+          <div class="simple-card">
+
+            <h3>
+              Payment Details
+            </h3>
+
+            <p>
+              Transfer the exact amount to the account shown below.
+            </p>
+
+
+            <div class="account-box">
+
+              <div class="account-row">
+
+                <span>
+                  Payment Method
+                </span>
+
+                <strong id="finalPaymentMethod">
+                  —
+                </strong>
+
+              </div>
+
+
+              <div class="account-row">
+
+                <span>
+                  Account Name
+                </span>
+
+                <strong id="finalAccountName">
+                  —
+                </strong>
+
+              </div>
+
+
+              <div class="account-row">
+
+                <span>
+                  Account Number
+                </span>
+
+                <strong id="finalAccountNumber">
+                  —
+                </strong>
+
+              </div>
+
+
+              <div class="account-row highlight">
+
+                <span>
+                  Amount to Transfer
+                </span>
+
+                <strong id="finalTransferAmount">
+                  ETB 0.00
+                </strong>
+
+              </div>
+
+            </div>
+
+
+            <div class="input-group recharge-input">
+
+              <label for="transactionId">
+                Transaction ID / Reference Number
+              </label>
+
+              <input
+                type="text"
+                id="transactionId"
+                name="transactionId"
+                placeholder="Enter transaction ID"
+                autocomplete="off"
+                maxlength="100"
+              >
+
+            </div>
+
+
+            <button
+              type="button"
+              class="primary-btn"
+              id="submitRechargeBtn"
+              onclick="window.submitRecharge()"
+            >
+              Submit Recharge
+            </button>
+
+
+            <button
+              type="button"
+              class="secondary-btn"
+              onclick="window.backToPaymentMethod()"
+            >
+              Back
+            </button>
+
+
+            <p
+              id="rechargeMessage"
+              class="admin-message"
+              aria-live="polite"
+            ></p>
+
+          </div>
+
+        </div>
+
+
+        <div
+          id="rechargePending"
+          class="recharge-step hidden"
+        >
+
+          <div
+            class="simple-card recharge-success"
+          >
+
+            <div class="success-icon">
+              ✓
+            </div>
+
+            <h3>
+              Recharge Submitted
+            </h3>
+
+            <p>
+              Your recharge request has been submitted successfully.
+            </p>
+
+
+            <div class="pending-box">
+
+              <span>
+                Status
+              </span>
+
+              <strong>
+                Pending
+              </strong>
+
+            </div>
+
+
+            <p class="small-note">
+              Your Total Recharge will not change until Admin approves this recharge.
+            </p>
+
+
+            <button
+              type="button"
+              class="primary-btn"
+              onclick="window.openPage('wallet')"
+            >
+              Back to Wallet
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         PROFILE PAGE
+    ====================================================== -->
+
+    <section
+      id="profilePage"
+      class="profile-page hidden"
+    >
+
+      <div class="profile-header">
+
+        <button
+          type="button"
+          class="back-btn"
+          onclick="window.openPage('home')"
+        >
+          ←
+        </button>
+
+        <h2>
+          Profile
+        </h2>
+
+        <div class="profile-avatar">
+          👤
+        </div>
+
+        <h3 id="profileName">
+          CCUS User
+        </h3>
+
+        <p id="profileEmail">
+          No email
+        </p>
+
+      </div>
+
+
+      <div class="profile-content">
+
+
+        <button
+          type="button"
+          class="profile-menu"
+          onclick="window.togglePersonalInfo()"
+        >
+
+          <div class="menu-left">
+
+            <div class="menu-icon">
+              👤
+            </div>
+
+            <div>
+
+              <h3>
+                Personal Information
+              </h3>
+
+              <p>
+                Name, email, account number
+              </p>
+
+            </div>
+
+          </div>
+
+          <span id="personalArrow">
+            ›
+          </span>
+
+        </button>
+
+
+        <div
+          id="personalInfo"
+          class="personal-info hidden"
+        >
+
+          <div class="personal-field">
+
+            <input
+              type="text"
+              id="personalFullName"
+              name="personalFullName"
+              placeholder="Enter full name"
+              autocomplete="name"
+            >
+
+          </div>
+
+
+          <div class="personal-field">
+
+            <input
+              type="email"
+              id="personalEmail"
+              name="personalEmail"
+              placeholder="Enter email"
+              autocomplete="email"
+            >
+
+          </div>
+
+
+          <div class="personal-field">
+
+            <input
+              type="text"
+              id="personalAccountNumber"
+              name="personalAccountNumber"
+              placeholder="Enter account number"
+              autocomplete="off"
+            >
+
+          </div>
+
+
+          <div class="personal-field">
+
+            <input
+              type="text"
+              id="personalPaymentMethod"
+              name="personalPaymentMethod"
+              placeholder="Enter Payment Method (e.g. CBE, Telebirr)"
+            >
+
+          </div>
+
+
+          <div class="personal-field">
+
+            <input
+              type="password"
+              id="personalPassword"
+              name="personalPassword"
+              placeholder="Enter your login password"
+              autocomplete="current-password"
+            >
+
+          </div>
+
+
+          <button
+            type="button"
+            class="save-btn"
+            onclick="window.savePersonalInformation()"
+          >
+            Save
+          </button>
+
+
+          <p
+            id="personalInfoMessage"
+            class="admin-message"
+            aria-live="polite"
+          ></p>
+
+        </div>
+
+
+        <button
+          type="button"
+          class="profile-menu"
+          onclick="window.openPage('referral')"
+        >
+
+          <div class="menu-left">
+
+            <div class="menu-icon">
+              🔗
+            </div>
+
+            <div>
+
+              <h3>
+                Referral Code
+              </h3>
+
+              <p>
+                Invite friends and earn commissions
+              </p>
+
+            </div>
+
+          </div>
+
+          <span>
+            ›
+          </span>
+
+        </button>
+
+
+        <button
+          type="button"
+          class="profile-menu"
+          onclick="window.openPage('vip')"
+        >
+
+          <div class="menu-left">
+
+            <div class="menu-icon">
+              👑
+            </div>
+
+            <div>
+
+              <h3>
+                VIP Levels
+              </h3>
+
+              <p>
+                View and manage VIP packages
+              </p>
+
+            </div>
+
+          </div>
+
+          <span>
+            ›
+          </span>
+
+        </button>
+
+
+        <!-- HELP CENTER → TELEGRAM -->
+
+        <button
+          type="button"
+          class="profile-menu"
+          onclick="window.openTelegramSupport()"
+        >
+
+          <div class="menu-left">
+
+            <div class="menu-icon">
+              ❓
+            </div>
+
+            <div>
+
+              <h3>
+                Help Center
+              </h3>
+
+              <p>
+                Get help and support on Telegram
+              </p>
+
+            </div>
+
+          </div>
+
+          <span>
+            ›
+          </span>
+
+        </button>
+
+
+        <button
+          type="button"
+          class="profile-menu"
+          onclick="window.openPage('about')"
+        >
+
+          <div class="menu-left">
+
+            <div class="menu-icon">
+              ℹ️
+            </div>
+
+            <div>
+
+              <h3>
+                About CCUS
+              </h3>
+
+              <p>
+                Learn more about CCUS
+              </p>
+
+            </div>
+
+          </div>
+
+          <span>
+            ›
+          </span>
+
+        </button>
+
+
+        <button
+          type="button"
+          class="profile-menu logout-menu"
+          onclick="window.logoutUser()"
+        >
+
+          <div class="menu-left">
+
+            <div class="menu-icon logout-icon">
+              🚪
+            </div>
+
+            <div>
+
+              <h3>
+                Logout
+              </h3>
+
+              <p>
+                Sign out of your account
+              </p>
+
+            </div>
+
+          </div>
+
+          <span>
+            ›
+          </span>
+
+        </button>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         REFERRAL PAGE
+    ====================================================== -->
+
+    <section
+      id="referralPage"
+      class="simple-page hidden"
+    >
+
+      <div class="simple-header">
+
+        <button
+          type="button"
+          class="back-btn"
+          onclick="window.openPage('profile')"
+        >
+          ←
+        </button>
+
+        <h2>
+          Referral & Team
+        </h2>
+
+      </div>
+
+
+      <div class="simple-content">
+
+
+        <div
+          class="simple-card referral-card"
+        >
+
+          <div class="large-icon">
+            🔗
+          </div>
+
+          <h3>
+            Your Referral Code
+          </h3>
+
+
+          <div class="referral-code-box">
+
+            <strong id="referralCodeDisplay">
+              CCUS000000
+            </strong>
+
+          </div>
+
+
+          <p>
+            Share your referral code with friends and build your CCUS community.
+          </p>
+
+
+          <button
+            type="button"
+            class="primary-btn"
+            onclick="window.copyReferralCode()"
+          >
+            Copy Referral Code
+          </button>
+
+        </div>
+
+
+        <div class="simple-card">
+
+          <h3>
+            Team Deposit Levels
+          </h3>
+
+          <p>
+            Referral commission is based on the approved deposit level of the user you referred.
+          </p>
+
+
+          <div
+            id="teamDepositLevels"
+            class="team-level-list"
+          >
+
+
+            <div
+              class="team-level-item"
+              data-level="L1"
+            >
+
+              <div>
+
+                <strong>
+                  L1
+                </strong>
+
+                <small>
+                  Deposit Level
+                </small>
+
+              </div>
+
+
+              <div>
+
+                <strong id="teamL1Amount">
+                  ETB 500
+                </strong>
+
+                <small>
+                  Deposit
+                </small>
+
+              </div>
+
+
+              <div>
+
+                <strong id="teamL1Commission">
+                  ETB 50
+                </strong>
+
+                <small>
+                  Commission
+                </small>
+
+              </div>
+
+            </div>
+
+
+            <div
+              class="team-level-item"
+              data-level="L2"
+            >
+
+              <div>
+
+                <strong>
+                  L2
+                </strong>
+
+                <small>
+                  Deposit Level
+                </small>
+
+              </div>
+
+
+              <div>
+
+                <strong id="teamL2Amount">
+                  ETB 1,000
+                </strong>
+
+                <small>
+                  Deposit
+                </small>
+
+              </div>
+
+
+              <div>
+
+                <strong id="teamL2Commission">
+                  ETB 120
+                </strong>
+
+                <small>
+                  Commission
+                </small>
+
+              </div>
+
+            </div>
+
+
+            <div
+              class="team-level-item"
+              data-level="L3"
+            >
+
+              <div>
+
+                <strong>
+                  L3
+                </strong>
+
+                <small>
+                  Deposit Level
+                </small>
+
+              </div>
+
+
+              <div>
+
+                <strong id="teamL3Amount">
+                  ETB 3,000
+                </strong>
+
+                <small>
+                  Deposit
+                </small>
+
+              </div>
+
+
+              <div>
+
+                <strong id="teamL3Commission">
+                  ETB 400
+                </strong>
+
+                <small>
+                  Commission
+                </small>
+
+              </div>
+
+            </div>
+
+
+            <div
+              class="team-level-item"
+              data-level="L4"
+            >
+
+              <div>
+
+                <strong>
+                  L4
+                </strong>
+
+                <small>
+                  Deposit Level
+                </small>
+
+              </div>
+
+
+              <div>
+
+                <strong id="teamL4Amount">
+                  ETB 5,000
+                </strong>
+
+                <small>
+                  Deposit
+                </small>
+
+              </div>
+
+
+              <div>
+
+                <strong id="teamL4Commission">
+                  ETB 750
+                </strong>
+
+                <small>
+                  Commission
+                </small>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div class="simple-card">
+
+          <h3>
+            Team Commission History
+          </h3>
+
+
+          <div
+            id="teamCommissionHistory"
+            class="recharge-history"
+            aria-live="polite"
+          >
+
+            <div class="empty-transactions">
+
+              <div>
+                👥
+              </div>
+
+              <h3>
+                No Commission Yet
+              </h3>
+
+              <p>
+                Approved referral commissions will appear here.
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         HELP CENTER
+         Telegram support page
+    ====================================================== -->
+
+    <section
+      id="helpPage"
+      class="simple-page hidden"
+    >
+
+      <div class="simple-header">
+
+        <button
+          type="button"
+          class="back-btn"
+          onclick="window.openPage('profile')"
+        >
+          ←
+        </button>
+
+        <h2>
+          Help Center
+        </h2>
+
+      </div>
+
+
+      <div class="simple-content">
+
+
+        <div class="simple-card">
+
+          <div
+            class="large-icon"
+            style="font-size:48px;"
+          >
+            💬
+          </div>
+
+          <h3>
+            CCUS Official Support
+          </h3>
+
+          <p>
+            For help and support, contact CCUS Official Support on Telegram.
+          </p>
+
+
+          <button
+            type="button"
+            class="primary-btn"
+            onclick="window.openTelegramSupport()"
+          >
+            💬 Open Telegram Support
+          </button>
+
+        </div>
+
+
+        <div class="faq-item">
+
+          <h3>
+            How can I recharge?
+          </h3>
+
+          <p>
+            Open Wallet, select Deposit, choose a recharge amount and follow the payment instructions.
+          </p>
+
+        </div>
+
+
+        <div class="faq-item">
+
+          <h3>
+            When does my recharge appear?
+          </h3>
+
+          <p>
+            Recharge requests remain Pending until they are reviewed and approved by Admin.
+          </p>
+
+        </div>
+
+
+        <div class="faq-item">
+
+          <h3>
+            Does a pending recharge increase my balance?
+          </h3>
+
+          <p>
+            No. A pending recharge does not change Total Balance or Total Recharge.
+          </p>
+
+        </div>
+
+
+        <div class="faq-item">
+
+          <h3>
+            What happens after approval?
+          </h3>
+
+          <p>
+            After Admin approval, the approved recharge amount is added to Total Recharge. A recharge does not directly increase Total Balance.
+          </p>
+
+        </div>
+
+
+        <div class="faq-item">
+
+          <h3>
+            How do referral commissions work?
+          </h3>
+
+          <p>
+            When a referred user makes an approved recharge, the referral commission is determined by the deposit level configured by CCUS Admin. Commission amounts are fixed ETB values, not percentages.
+          </p>
+
+        </div>
+
+
+        <div class="faq-item">
+
+          <h3>
+            How do daily tasks work?
+          </h3>
+
+          <p>
+            Daily tasks are available from Monday through Saturday for eligible users. The number of available tasks and reward per task are configured by CCUS Admin. Each task can be claimed only once per day.
+          </p>
+
+        </div>
+
+
+        <div class="faq-item">
+
+          <h3>
+            Is Sunday a task day?
+          </h3>
+
+          <p>
+            No. Sunday is a Rest Day. Tasks cannot be claimed on Sunday.
+          </p>
+
+        </div>
+
+
+        <div class="faq-item">
+
+          <h3>
+            How does withdrawal work?
+          </h3>
+
+          <p>
+            Select an amount, enter your password and submit the withdrawal request. The requested amount is reserved from Total Balance and the request remains Pending until Admin reviews it.
+          </p>
+
+        </div>
+
+
+        <div class="faq-item">
+
+          <h3>
+            What happens if Admin rejects my withdrawal?
+          </h3>
+
+          <p>
+            If a withdrawal is rejected, the reserved amount should be returned to your Total Balance.
+          </p>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         ABOUT CCUS
+    ====================================================== -->
+
+    <section
+      id="aboutPage"
+      class="simple-page hidden"
+    >
+
+      <div class="simple-header">
+
+        <button
+          type="button"
+          class="back-btn"
+          onclick="window.openPage('profile')"
+        >
+          ←
+        </button>
+
+        <h2>
+          About CCUS
+        </h2>
+
+      </div>
+
+
+      <div class="simple-content">
+
+        <div class="about-logo">
+          C
+        </div>
+
+        <h1 class="about-title">
+          CCUS Platform
+        </h1>
+
+
+        <div class="simple-card about-card">
+
+          <h3>
+            About CCUS
+          </h3>
+
+          <p>
+            CCUS is a digital earning and task-management platform designed to provide users with digital tasks, referral opportunities, rewards and financial transaction features.
+          </p>
+
+        </div>
+
+
+        <div class="simple-card about-card">
+
+          <h3>
+            CCUS Balance System
+          </h3>
+
+          <p>
+            Total Balance represents earnings such as task rewards, rewards, daily income and approved referral commissions.
+          </p>
+
+          <p>
+            Total Recharge represents the user's own approved recharge amount.
+          </p>
+
+        </div>
+
+
+        <div class="simple-card about-card">
+
+          <h3>
+            Important
+          </h3>
+
+          <p>
+            Recharge requests are reviewed by CCUS Admin. A pending recharge does not increase your Total Recharge until it is approved.
+          </p>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         VIP PAGE
+    ====================================================== -->
+
+    <section
+      id="vipPage"
+      class="simple-page hidden"
+    >
+
+      <div class="simple-header">
+
+        <button
+          type="button"
+          class="back-btn"
+          onclick="window.openPage('home')"
+        >
+          ←
+        </button>
+
+        <h2>
+          VIP Levels
+        </h2>
+
+      </div>
+
+
+      <div class="simple-content">
+
+        <div class="simple-card">
+
+          <div class="large-icon">
+            👑
+          </div>
+
+          <h3>
+            VIP Packages
+          </h3>
+
+          <p>
+            View available VIP packages configured by CCUS Admin.
+          </p>
+
+          <p class="small-note">
+            VIP package information, prices and rewards are loaded dynamically from the CCUS database.
+          </p>
+
+        </div>
+
+
+        <div
+          id="vipContainer"
+          class="vip-container"
+          aria-live="polite"
+        >
+
+          <p style="text-align:center;">
+            Loading VIP Packages...
+          </p>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         BOTTOM NAVIGATION
+    ====================================================== -->
+
+    <nav
+      id="bottomNav"
+      class="bottom-nav hidden"
+    >
+
+      <button
+        type="button"
+        class="nav-item active"
+        data-page="home"
+        onclick="window.openPage('home')"
+      >
+
+        <span>
+          🏠
+        </span>
+
+        <small>
+          Home
+        </small>
+
+      </button>
+
+
+      <button
+        type="button"
+        class="nav-item"
+        data-page="tasks"
+        onclick="window.openPage('tasks')"
+      >
+
+        <span>
+          📋
+        </span>
+
+        <small>
+          Tasks
+        </small>
+
+      </button>
+
+
+      <button
+        type="button"
+        class="nav-item"
+        data-page="referral"
+        onclick="window.openPage('referral')"
+      >
+
+        <span>
+          👥
+        </span>
+
+        <small>
+          Team
+        </small>
+
+      </button>
+
+
+      <button
+        type="button"
+        class="nav-item"
+        data-page="wallet"
+        onclick="window.openPage('wallet')"
+      >
+
+        <span>
+          💰
+        </span>
+
+        <small>
+          Wallet
+        </small>
+
+      </button>
+
+
+      <button
+        type="button"
+        class="nav-item"
+        data-page="profile"
+        onclick="window.openPage('profile')"
+      >
+
+        <span>
+          👤
+        </span>
+
+        <small>
+          Profile
+        </small>
+
+      </button>
+
+    </nav>
+
+  </div>
+
+
+  <!-- =====================================================
+       PERSONAL INFORMATION TOGGLE
+  ====================================================== -->
+
+  <script>
+
+    window.togglePersonalInfo = function () {
+
+      const box =
+        document.getElementById(
+          "personalInfo"
+        );
+
+      const arrow =
+        document.getElementById(
+          "personalArrow"
+        );
+
+      if (!box) {
+        return;
+      }
+
+      box.classList.toggle(
+        "hidden"
+      );
+
+      if (arrow) {
+
+        arrow.textContent =
+          box.classList.contains("hidden")
+            ? "›"
+            : "⌄";
+
+      }
+
+    };
+
+
+    /* =====================================================
+       TELEGRAM SUPPORT
+       Username: @CCUSSuppor
+    ====================================================== */
+
+    window.openTelegramSupport = function () {
+
+      const telegramUsername =
+        "CCUSSuppor";
+
+      const telegramApp =
+        "tg://resolve?domain=" +
+        telegramUsername;
+
+      const telegramWeb =
+        "https://t.me/" +
+        telegramUsername;
+
+      /*
+       * Try Telegram application first.
+       */
+
+      window.location.href =
+        telegramApp;
+
+      /*
+       * Browser fallback.
+       */
+
+      setTimeout(
+        function () {
+
+          window.location.href =
+            telegramWeb;
+
+        },
+        1200
+      );
+
+    };
+
+  </script>
+
+
+  <!-- =====================================================
+       MAIN APP JAVASCRIPT
+  ====================================================== -->
+
+  <script
+    type="module"
+    src="./app.js"
+  ></script>
+
+
+</body>
+
+</html>

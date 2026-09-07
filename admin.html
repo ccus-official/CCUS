@@ -1,0 +1,1857 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f0a500">
+  <title>CCUS Admin Panel</title>
+  <link rel="stylesheet" href="./admin.css">
+</head>
+
+<body>
+
+  <div class="admin-app">
+
+    <!-- =====================================================
+         ADMIN LOGIN
+    ====================================================== -->
+    <section id="adminLoginPage" class="admin-login-page">
+
+      <div class="admin-login-logo">
+        <div class="admin-logo-circle">C</div>
+        <h1>CCUS</h1>
+        <p>Admin Panel</p>
+      </div>
+
+      <div class="admin-login-card">
+        <h2>Admin Login</h2>
+        <p class="admin-login-subtitle">Sign in to manage CCUS.</p>
+
+        <div class="admin-input-group">
+          <label for="adminEmail">Email</label>
+          <input
+            type="email"
+            id="adminEmail"
+            placeholder="Enter admin email"
+            autocomplete="email"
+          >
+        </div>
+
+        <div class="admin-input-group">
+          <label for="adminPassword">Password</label>
+          <input
+            type="password"
+            id="adminPassword"
+            placeholder="Enter admin password"
+            autocomplete="current-password"
+          >
+        </div>
+
+        <button
+          type="button"
+          class="admin-primary-btn"
+          onclick="window.adminLogin()"
+        >
+          Login
+        </button>
+
+        <p id="adminLoginMessage" class="admin-message"></p>
+      </div>
+
+    </section>
+
+
+    <!-- =====================================================
+         ADMIN APPLICATION
+    ====================================================== -->
+    <section id="adminDashboardPage" class="admin-dashboard-page hidden">
+
+      <!-- ===================================================
+           HEADER
+      ==================================================== -->
+      <header class="admin-header">
+
+        <div>
+          <p class="admin-small-title">CCUS ADMIN</p>
+          <h1 id="adminPageTitle">Dashboard</h1>
+        </div>
+
+        <button
+          type="button"
+          class="admin-logout-btn"
+          onclick="window.adminLogout()"
+        >
+          Logout
+        </button>
+
+      </header>
+
+
+      <!-- ===================================================
+           DASHBOARD
+      ==================================================== -->
+      <div id="adminDashboardContent" class="admin-page-content">
+
+        <main class="admin-content">
+
+          <!-- OVERVIEW -->
+          <section class="admin-section">
+
+            <h2 class="admin-section-title">
+              Overview
+            </h2>
+
+            <div class="admin-stat-grid">
+
+              <div class="admin-stat-card">
+                <div class="admin-stat-icon">👥</div>
+
+                <div>
+                  <span>Total Users</span>
+                  <strong id="adminTotalUsers">0</strong>
+                </div>
+              </div>
+
+
+              <div class="admin-stat-card">
+                <div class="admin-stat-icon">💰</div>
+
+                <div>
+                  <span>Pending Recharge</span>
+                  <strong id="adminPendingRecharge">0</strong>
+                </div>
+              </div>
+
+
+              <div class="admin-stat-card">
+                <div class="admin-stat-icon">🟢</div>
+
+                <div>
+                  <span>Approved Recharge</span>
+                  <strong id="adminApprovedRecharge">0</strong>
+                </div>
+              </div>
+
+
+              <div class="admin-stat-card">
+                <div class="admin-stat-icon">⏳</div>
+
+                <div>
+                  <span>Pending Withdraw</span>
+                  <strong id="adminPendingWithdraw">0</strong>
+                </div>
+              </div>
+
+
+              <div class="admin-stat-card">
+                <div class="admin-stat-icon">💸</div>
+
+                <div>
+                  <span>Approved Withdraw</span>
+                  <strong id="adminApprovedWithdraw">0</strong>
+                </div>
+              </div>
+
+            </div>
+
+          </section>
+
+
+          <!-- MANAGEMENT -->
+          <section class="admin-section">
+
+            <h2 class="admin-section-title">
+              Management
+            </h2>
+
+            <div class="admin-management-grid">
+
+              <!-- RECHARGE -->
+              <button
+                type="button"
+                class="admin-management-card"
+                onclick="window.openAdminSection('recharge')"
+              >
+                <span>💰</span>
+                <strong>Recharge</strong>
+                <small>Review user recharge requests</small>
+              </button>
+
+
+              <!-- WITHDRAW -->
+              <button
+                type="button"
+                class="admin-management-card"
+                onclick="window.openAdminSection('withdraw')"
+              >
+                <span>💸</span>
+                <strong>Withdraw</strong>
+                <small>Review withdrawal requests</small>
+              </button>
+
+
+              <!-- VIP -->
+              <button
+                type="button"
+                class="admin-management-card"
+                onclick="window.openAdminSection('vip')"
+              >
+                <span>👑</span>
+                <strong>VIP Levels</strong>
+                <small>Manage VIP packages</small>
+              </button>
+
+
+              <!-- RECHARGE LEVELS -->
+              <button
+                type="button"
+                class="admin-management-card"
+                onclick="window.openAdminSection('levels')"
+              >
+                <span>⚙️</span>
+                <strong>Recharge Levels</strong>
+                <small>Manage amounts, commissions & tasks</small>
+              </button>
+
+
+              <!-- WITHDRAW LEVELS -->
+              <button
+                type="button"
+                class="admin-management-card"
+                onclick="window.openAdminSection('withdrawLevels')"
+              >
+                <span>💵</span>
+                <strong>Withdraw Levels</strong>
+                <small>Manage withdrawal amounts</small>
+              </button>
+
+
+              <!-- PAYMENT METHODS -->
+              <button
+                type="button"
+                class="admin-management-card"
+                onclick="window.openAdminSection('payments')"
+              >
+                <span>🏦</span>
+                <strong>Payment Methods</strong>
+                <small>Manage payment accounts</small>
+              </button>
+
+
+              <!-- USERS -->
+              <button
+                type="button"
+                class="admin-management-card"
+                onclick="window.openAdminSection('users')"
+              >
+                <span>👥</span>
+                <strong>Users</strong>
+                <small>View registered users</small>
+              </button>
+
+
+              <!-- REWARDS -->
+              <button
+                type="button"
+                class="admin-management-card"
+                onclick="window.openAdminSection('rewards')"
+              >
+                <span>🎁</span>
+                <strong>Rewards</strong>
+                <small>Manage rewards</small>
+              </button>
+
+
+              <!-- TASKS -->
+              <button
+                type="button"
+                class="admin-management-card"
+                onclick="window.openAdminSection('tasks')"
+              >
+                <span>✅</span>
+                <strong>Tasks</strong>
+                <small>Manage daily tasks</small>
+              </button>
+
+
+              <!-- ANNOUNCEMENTS -->
+              <button
+                type="button"
+                class="admin-management-card"
+                onclick="window.openAdminSection('announcements')"
+              >
+                <span>📢</span>
+                <strong>Announcements</strong>
+                <small>Manage user announcements</small>
+              </button>
+
+
+              <!-- CALENDAR -->
+              <button
+                type="button"
+                class="admin-management-card"
+                onclick="window.openAdminSection('calendar')"
+              >
+                <span>📅</span>
+                <strong>Calendar</strong>
+                <small>Manage rest & closed days</small>
+              </button>
+
+            </div>
+
+          </section>
+
+
+          <!-- RECENT RECHARGE -->
+          <section class="admin-section">
+
+            <div class="admin-section-heading">
+
+              <h2 class="admin-section-title">
+                Recent Recharge
+              </h2>
+
+              <button
+                type="button"
+                class="admin-view-btn"
+                onclick="window.openAdminSection('recharge')"
+              >
+                View All
+              </button>
+
+            </div>
+
+
+            <div
+              id="adminRecentRecharge"
+              class="admin-recent-list"
+            >
+
+              <div class="admin-empty">
+                <div>📄</div>
+                <h3>Loading Recharge Requests...</h3>
+                <p>Recharge requests will appear here.</p>
+              </div>
+
+            </div>
+
+          </section>
+
+
+          <!-- RECENT WITHDRAW -->
+          <section class="admin-section">
+
+            <div class="admin-section-heading">
+
+              <h2 class="admin-section-title">
+                Recent Withdraw
+              </h2>
+
+              <button
+                type="button"
+                class="admin-view-btn"
+                onclick="window.openAdminSection('withdraw')"
+              >
+                View All
+              </button>
+
+            </div>
+
+
+            <div
+              id="adminRecentWithdraw"
+              class="admin-recent-list"
+            >
+
+              <div class="admin-empty">
+                <div>💸</div>
+                <h3>Loading Withdrawal Requests...</h3>
+                <p>Withdrawal requests will appear here.</p>
+              </div>
+
+            </div>
+
+          </section>
+
+        </main>
+
+      </div>
+
+
+      <!-- ===================================================
+           RECHARGE REQUESTS
+      ==================================================== -->
+      <div
+        id="adminRechargeSection"
+        class="admin-page-content hidden"
+      >
+
+        <main class="admin-content">
+
+          <div class="admin-section-heading">
+
+            <div>
+              <p class="admin-small-title">
+                MANAGEMENT
+              </p>
+
+              <h2 class="admin-section-title">
+                Recharge Requests
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              class="admin-view-btn"
+              onclick="window.adminNavigate('dashboard')"
+            >
+              ← Back
+            </button>
+
+          </div>
+
+
+          <div
+            id="rechargeRequestsList"
+            class="admin-recent-list"
+          >
+
+            <div class="admin-empty">
+              <div>💰</div>
+              <h3>Loading...</h3>
+              <p>Recharge requests will appear here.</p>
+            </div>
+
+          </div>
+
+        </main>
+
+      </div>
+
+
+      <!-- ===================================================
+           WITHDRAW REQUESTS
+      ==================================================== -->
+      <div
+        id="adminWithdrawSection"
+        class="admin-page-content hidden"
+      >
+
+        <main class="admin-content">
+
+          <div class="admin-section-heading">
+
+            <div>
+              <p class="admin-small-title">
+                MANAGEMENT
+              </p>
+
+              <h2 class="admin-section-title">
+                Withdraw Requests
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              class="admin-view-btn"
+              onclick="window.adminNavigate('dashboard')"
+            >
+              ← Back
+            </button>
+
+          </div>
+
+
+          <div class="admin-form-card">
+
+            <h3>Withdrawal Requests</h3>
+
+            <div class="admin-form-grid">
+
+              <div class="admin-input-group">
+
+                <label for="withdrawStatusFilter">
+                  Status
+                </label>
+
+                <select
+                  id="withdrawStatusFilter"
+                  onchange="window.loadAdminWithdrawRequests()"
+                >
+                  <option value="all">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div
+            id="withdrawRequestsList"
+            class="admin-recent-list"
+          >
+
+            <div class="admin-empty">
+              <div>💸</div>
+              <h3>Loading Withdrawal Requests...</h3>
+              <p>Withdrawal requests will appear here.</p>
+            </div>
+
+          </div>
+
+        </main>
+
+      </div>
+
+
+      <!-- ===================================================
+           VIP LEVELS
+      ==================================================== -->
+      <div
+        id="adminVipSection"
+        class="admin-page-content hidden"
+      >
+
+        <main class="admin-content">
+
+          <div class="admin-section-heading">
+
+            <div>
+              <p class="admin-small-title">
+                SETTINGS
+              </p>
+
+              <h2 class="admin-section-title">
+                VIP Levels
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              class="admin-view-btn"
+              onclick="window.adminNavigate('dashboard')"
+            >
+              ← Back
+            </button>
+
+          </div>
+
+
+          <div class="admin-form-card">
+
+            <h3>Add / Update VIP Level</h3>
+
+            <div class="admin-form-grid">
+
+              <div class="admin-input-group">
+                <label for="newVipLevel">
+                  VIP Level (Number)
+                </label>
+
+                <input
+                  type="number"
+                  id="newVipLevel"
+                  placeholder="e.g. 1"
+                  min="1"
+                  step="1"
+                >
+              </div>
+
+
+              <div class="admin-input-group">
+                <label for="newVipName">
+                  VIP Name
+                </label>
+
+                <input
+                  type="text"
+                  id="newVipName"
+                  placeholder="e.g. VIP 1"
+                >
+              </div>
+
+
+              <div class="admin-input-group">
+                <label for="newVipPrice">
+                  Price (ETB)
+                </label>
+
+                <input
+                  type="number"
+                  id="newVipPrice"
+                  placeholder="e.g. 500"
+                  min="0"
+                  step="0.01"
+                >
+              </div>
+
+
+              <div class="admin-input-group">
+                <label for="newVipProfit">
+                  Total Profit (ETB)
+                </label>
+
+                <input
+                  type="number"
+                  id="newVipProfit"
+                  placeholder="e.g. 150"
+                  min="0"
+                  step="0.01"
+                >
+              </div>
+
+
+              <div class="admin-input-group">
+                <label for="newVipValidDays">
+                  Validity (Days)
+                </label>
+
+                <input
+                  type="number"
+                  id="newVipValidDays"
+                  placeholder="e.g. 30"
+                  min="1"
+                  step="1"
+                >
+              </div>
+
+            </div>
+
+
+            <button
+              type="button"
+              class="admin-primary-btn"
+              onclick="window.addVipLevel()"
+            >
+              + Add VIP Level
+            </button>
+
+            <p
+              id="adminVipMessage"
+              class="admin-message"
+            ></p>
+
+          </div>
+
+
+          <div
+            id="adminVipLevelsList"
+            class="admin-level-list"
+          >
+
+            <div class="admin-empty">
+              <div>👑</div>
+              <h3>Loading VIP Levels...</h3>
+              <p>VIP levels will appear here.</p>
+            </div>
+
+          </div>
+
+        </main>
+
+      </div>
+
+
+      <!-- ===================================================
+           RECHARGE LEVELS
+           NOW INCLUDES DAILY TASK LIMIT
+      ==================================================== -->
+      <div
+        id="adminLevelsSection"
+        class="admin-page-content hidden"
+      >
+
+        <main class="admin-content">
+
+          <div class="admin-section-heading">
+
+            <div>
+              <p class="admin-small-title">
+                SETTINGS
+              </p>
+
+              <h2 class="admin-section-title">
+                Recharge Levels
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              class="admin-view-btn"
+              onclick="window.adminNavigate('dashboard')"
+            >
+              ← Back
+            </button>
+
+          </div>
+
+
+          <!-- ===============================================
+               ADD RECHARGE LEVEL
+          ================================================ -->
+          <div class="admin-form-card">
+
+            <h3>Add Recharge Level</h3>
+
+            <p>
+              Configure deposit amount, referral commission,
+              daily task limit and display order.
+            </p>
+
+
+            <div class="admin-form-grid">
+
+              <!-- AMOUNT -->
+              <div class="admin-input-group">
+
+                <label for="newRechargeAmount">
+                  Amount (ETB)
+                </label>
+
+                <input
+                  type="number"
+                  id="newRechargeAmount"
+                  placeholder="e.g. 500"
+                  min="1"
+                  step="0.01"
+                >
+
+              </div>
+
+
+              <!-- NAME -->
+              <div class="admin-input-group">
+
+                <label for="newRechargeName">
+                  Display Name
+                </label>
+
+                <input
+                  type="text"
+                  id="newRechargeName"
+                  placeholder="e.g. 500"
+                >
+
+              </div>
+
+
+              <!-- COMMISSION -->
+              <div class="admin-input-group">
+
+                <label for="newRechargeCommission">
+                  Referral Commission (ETB)
+                </label>
+
+                <input
+                  type="number"
+                  id="newRechargeCommission"
+                  placeholder="e.g. 20"
+                  min="0"
+                  step="0.01"
+                >
+
+              </div>
+
+
+              <!-- TASK LIMIT -->
+              <div class="admin-input-group">
+
+                <label for="newRechargeTaskLimit">
+                  Daily Task Limit
+                </label>
+
+                <input
+                  type="number"
+                  id="newRechargeTaskLimit"
+                  placeholder="e.g. 1"
+                  min="0"
+                  step="1"
+                >
+
+              </div>
+
+
+              <!-- ORDER -->
+              <div class="admin-input-group">
+
+                <label for="newRechargeOrder">
+                  Order
+                </label>
+
+                <input
+                  type="number"
+                  id="newRechargeOrder"
+                  placeholder="1"
+                  min="1"
+                  step="1"
+                >
+
+              </div>
+
+            </div>
+
+
+            <button
+              type="button"
+              class="admin-primary-btn"
+              onclick="window.addRechargeLevel()"
+            >
+              + Add Level
+            </button>
+
+          </div>
+
+
+          <!-- ===============================================
+               RECHARGE LEVEL LIST
+          ================================================ -->
+          <div
+            id="adminRechargeLevelsList"
+            class="admin-level-list"
+          >
+
+            <div class="admin-empty">
+
+              <div>⚙️</div>
+
+              <h3>
+                Loading Recharge Levels...
+              </h3>
+
+              <p>
+                Recharge levels will appear here.
+              </p>
+
+            </div>
+
+          </div>
+
+        </main>
+
+      </div>
+
+
+      <!-- ===================================================
+           WITHDRAW LEVELS
+      ==================================================== -->
+      <div
+        id="adminWithdrawLevelsSection"
+        class="admin-page-content hidden"
+      >
+
+        <main class="admin-content">
+
+          <div class="admin-section-heading">
+
+            <div>
+              <p class="admin-small-title">
+                SETTINGS
+              </p>
+
+              <h2 class="admin-section-title">
+                Withdraw Levels
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              class="admin-view-btn"
+              onclick="window.adminNavigate('dashboard')"
+            >
+              ← Back
+            </button>
+
+          </div>
+
+
+          <div class="admin-form-card">
+
+            <h3>Add Withdraw Level</h3>
+
+            <div class="admin-form-grid">
+
+              <div class="admin-input-group">
+
+                <label for="newWithdrawAmount">
+                  Amount (ETB)
+                </label>
+
+                <input
+                  type="number"
+                  id="newWithdrawAmount"
+                  placeholder="e.g. 200"
+                  min="1"
+                  step="0.01"
+                >
+
+              </div>
+
+
+              <div class="admin-input-group">
+
+                <label for="newWithdrawName">
+                  Display Name
+                </label>
+
+                <input
+                  type="text"
+                  id="newWithdrawName"
+                  placeholder="e.g. Withdraw 200"
+                >
+
+              </div>
+
+
+              <div class="admin-input-group">
+
+                <label for="newWithdrawOrder">
+                  Order
+                </label>
+
+                <input
+                  type="number"
+                  id="newWithdrawOrder"
+                  placeholder="1"
+                  min="1"
+                  step="1"
+                >
+
+              </div>
+
+            </div>
+
+
+            <button
+              type="button"
+              class="admin-primary-btn"
+              onclick="window.addWithdrawLevel()"
+            >
+              + Add Withdraw Level
+            </button>
+
+          </div>
+
+
+          <div
+            id="adminWithdrawLevelsList"
+            class="admin-level-list"
+          >
+
+            <div class="admin-empty">
+              <div>💸</div>
+              <h3>Loading Withdraw Levels...</h3>
+              <p>Withdrawal amounts will appear here.</p>
+            </div>
+
+          </div>
+
+        </main>
+
+      </div>
+
+
+      <!-- ===================================================
+           PAYMENT METHODS
+      ==================================================== -->
+      <div
+        id="adminPaymentsSection"
+        class="admin-page-content hidden"
+      >
+
+        <main class="admin-content">
+
+          <div class="admin-section-heading">
+
+            <div>
+              <p class="admin-small-title">
+                SETTINGS
+              </p>
+
+              <h2 class="admin-section-title">
+                Payment Methods
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              class="admin-view-btn"
+              onclick="window.adminNavigate('dashboard')"
+            >
+              ← Back
+            </button>
+
+          </div>
+
+
+          <div class="admin-form-card">
+
+            <h3>Add Payment Method</h3>
+
+            <div class="admin-form-grid">
+
+              <div class="admin-input-group">
+
+                <label for="newPaymentName">
+                  Method Name
+                </label>
+
+                <input
+                  type="text"
+                  id="newPaymentName"
+                  placeholder="e.g. CBE"
+                >
+
+              </div>
+
+
+              <div class="admin-input-group">
+
+                <label for="newPaymentAccountName">
+                  Account Name
+                </label>
+
+                <input
+                  type="text"
+                  id="newPaymentAccountName"
+                  placeholder="e.g. Account Owner"
+                >
+
+              </div>
+
+
+              <div class="admin-input-group">
+
+                <label for="newPaymentAccountNumber">
+                  Account Number
+                </label>
+
+                <input
+                  type="text"
+                  id="newPaymentAccountNumber"
+                  placeholder="Enter account number"
+                >
+
+              </div>
+
+
+              <div class="admin-input-group">
+
+                <label for="newPaymentOrder">
+                  Order
+                </label>
+
+                <input
+                  type="number"
+                  id="newPaymentOrder"
+                  value="1"
+                  min="1"
+                  step="1"
+                >
+
+              </div>
+
+            </div>
+
+
+            <button
+              type="button"
+              class="admin-primary-btn"
+              onclick="window.addPaymentMethod()"
+            >
+              + Add Payment Method
+            </button>
+
+          </div>
+
+
+          <div
+            id="adminPaymentMethodsList"
+            class="admin-level-list"
+          >
+
+            <div class="admin-empty">
+              <div>🏦</div>
+              <h3>Loading Payment Methods...</h3>
+              <p>Payment methods will appear here.</p>
+            </div>
+
+          </div>
+
+        </main>
+
+      </div>
+
+
+      <!-- ===================================================
+           USERS
+      ==================================================== -->
+      <div
+        id="adminUsersSection"
+        class="admin-page-content hidden"
+      >
+
+        <main class="admin-content">
+
+          <div class="admin-section-heading">
+
+            <div>
+              <p class="admin-small-title">
+                MANAGEMENT
+              </p>
+
+              <h2 class="admin-section-title">
+                Users
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              class="admin-view-btn"
+              onclick="window.adminNavigate('dashboard')"
+            >
+              ← Back
+            </button>
+
+          </div>
+
+
+          <div
+            id="adminUsersList"
+            class="admin-recent-list"
+          >
+
+            <div class="admin-empty">
+              <div>👥</div>
+              <h3>Loading Users...</h3>
+              <p>Registered users will appear here.</p>
+            </div>
+
+          </div>
+
+        </main>
+
+      </div>
+
+
+      <!-- ===================================================
+           REWARDS
+      ==================================================== -->
+      <div
+        id="adminRewardsSection"
+        class="admin-page-content hidden"
+      >
+
+        <main class="admin-content">
+
+          <div class="admin-section-heading">
+
+            <div>
+              <p class="admin-small-title">
+                MANAGEMENT
+              </p>
+
+              <h2 class="admin-section-title">
+                Rewards
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              class="admin-view-btn"
+              onclick="window.adminNavigate('dashboard')"
+            >
+              ← Back
+            </button>
+
+          </div>
+
+
+          <div class="admin-form-card">
+
+            <h3>Rewards Management</h3>
+
+            <p>
+              Reward management will be configured here.
+            </p>
+
+          </div>
+
+        </main>
+
+      </div>
+
+
+      <!-- ===================================================
+           TASKS
+      ==================================================== -->
+      <div
+        id="adminTasksSection"
+        class="admin-page-content hidden"
+      >
+
+        <main class="admin-content">
+
+          <div class="admin-section-heading">
+
+            <div>
+              <p class="admin-small-title">
+                MANAGEMENT
+              </p>
+
+              <h2 class="admin-section-title">
+                Daily Tasks
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              class="admin-view-btn"
+              onclick="window.adminNavigate('dashboard')"
+            >
+              ← Back
+            </button>
+
+          </div>
+
+
+          <!-- TASK SETTINGS -->
+          <div class="admin-form-card">
+
+            <h3>Task Settings</h3>
+
+            <p>
+              Global task settings are used together with each
+              Recharge Level's Daily Task Limit.
+            </p>
+
+
+            <div class="admin-form-grid">
+
+              <!-- SYSTEM -->
+              <div class="admin-input-group">
+
+                <label for="taskSettingsActive">
+                  Task System
+                </label>
+
+                <select id="taskSettingsActive">
+
+                  <option value="true">
+                    Active
+                  </option>
+
+                  <option value="false">
+                    Disabled
+                  </option>
+
+                </select>
+
+              </div>
+
+
+              <!-- GLOBAL TASK COUNT -->
+              <div class="admin-input-group">
+
+                <label for="taskSettingsCount">
+                  Daily Task Count
+                </label>
+
+                <input
+                  type="number"
+                  id="taskSettingsCount"
+                  min="0"
+                  step="1"
+                  placeholder="e.g. 4"
+                >
+
+              </div>
+
+
+              <!-- REWARD -->
+              <div class="admin-input-group">
+
+                <label for="taskSettingsReward">
+                  Reward Per Task (ETB)
+                </label>
+
+                <input
+                  type="number"
+                  id="taskSettingsReward"
+                  min="0"
+                  step="0.01"
+                  placeholder="e.g. 10"
+                >
+
+              </div>
+
+            </div>
+
+
+            <button
+              type="button"
+              class="admin-primary-btn"
+              onclick="window.saveTaskSettings()"
+            >
+              Save Task Settings
+            </button>
+
+            <p
+              id="taskSettingsMessage"
+              class="admin-message"
+            ></p>
+
+          </div>
+
+
+          <!-- ADD TASK -->
+          <div class="admin-form-card">
+
+            <h3>Add Daily Task</h3>
+
+            <p>
+              Task reward is controlled by the global
+              Reward Per Task setting.
+              The maximum daily claims can also be restricted
+              by Recharge Level.
+            </p>
+
+
+            <div class="admin-form-grid">
+
+              <!-- TITLE -->
+              <div class="admin-input-group">
+
+                <label for="newTaskTitle">
+                  Task Title
+                </label>
+
+                <input
+                  type="text"
+                  id="newTaskTitle"
+                  placeholder="e.g. Daily Check"
+                >
+
+              </div>
+
+
+              <!-- DESCRIPTION -->
+              <div class="admin-input-group">
+
+                <label for="newTaskDescription">
+                  Description
+                </label>
+
+                <input
+                  type="text"
+                  id="newTaskDescription"
+                  placeholder="e.g. Complete today's task"
+                >
+
+              </div>
+
+
+              <!-- ORDER -->
+              <div class="admin-input-group">
+
+                <label for="newTaskOrder">
+                  Order
+                </label>
+
+                <input
+                  type="number"
+                  id="newTaskOrder"
+                  min="1"
+                  step="1"
+                  value="1"
+                >
+
+              </div>
+
+
+              <!-- ACTIVE -->
+              <div class="admin-input-group">
+
+                <label for="newTaskActive">
+                  Active
+                </label>
+
+                <select id="newTaskActive">
+
+                  <option value="true">
+                    Active
+                  </option>
+
+                  <option value="false">
+                    Disabled
+                  </option>
+
+                </select>
+
+              </div>
+
+            </div>
+
+
+            <button
+              type="button"
+              class="admin-primary-btn"
+              onclick="window.addAdminTask()"
+            >
+              + Add Task
+            </button>
+
+            <p
+              id="adminTaskMessage"
+              class="admin-message"
+            ></p>
+
+          </div>
+
+
+          <!-- ALL TASKS -->
+          <div class="admin-form-card">
+
+            <h3>All Daily Tasks</h3>
+
+            <p>
+              Manage tasks available to CCUS users.
+            </p>
+
+
+            <div
+              id="adminTasksList"
+              class="admin-level-list"
+            >
+
+              <div class="admin-empty">
+                <div>📋</div>
+                <h3>Loading Tasks...</h3>
+                <p>Daily tasks will appear here.</p>
+              </div>
+
+            </div>
+
+          </div>
+
+        </main>
+
+      </div>
+
+
+      <!-- ===================================================
+           ANNOUNCEMENTS
+      ==================================================== -->
+      <div
+        id="adminAnnouncementsSection"
+        class="admin-page-content hidden"
+      >
+
+        <main class="admin-content">
+
+          <div class="admin-section-heading">
+
+            <div>
+              <p class="admin-small-title">
+                CONTENT
+              </p>
+
+              <h2 class="admin-section-title">
+                Announcements
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              class="admin-view-btn"
+              onclick="window.adminNavigate('dashboard')"
+            >
+              ← Back
+            </button>
+
+          </div>
+
+
+          <!-- ADD ANNOUNCEMENT -->
+          <div class="admin-form-card">
+
+            <h3>Add Announcement</h3>
+
+
+            <div class="admin-form-grid">
+
+              <!-- TITLE -->
+              <div class="admin-input-group">
+
+                <label for="newAnnouncementTitle">
+                  Title
+                </label>
+
+                <input
+                  type="text"
+                  id="newAnnouncementTitle"
+                  placeholder="e.g. Welcome to CCUS"
+                >
+
+              </div>
+
+
+              <!-- STATUS -->
+              <div class="admin-input-group">
+
+                <label for="newAnnouncementActive">
+                  Status
+                </label>
+
+                <select id="newAnnouncementActive">
+
+                  <option value="true">
+                    Active
+                  </option>
+
+                  <option value="false">
+                    Disabled
+                  </option>
+
+                </select>
+
+              </div>
+
+
+              <!-- PRIORITY -->
+              <div class="admin-input-group">
+
+                <label for="newAnnouncementImportant">
+                  Priority
+                </label>
+
+                <select id="newAnnouncementImportant">
+
+                  <option value="false">
+                    Normal
+                  </option>
+
+                  <option value="true">
+                    Important
+                  </option>
+
+                </select>
+
+              </div>
+
+            </div>
+
+
+            <div class="admin-input-group">
+
+              <label for="newAnnouncementMessage">
+                Announcement Message
+              </label>
+
+              <textarea
+                id="newAnnouncementMessage"
+                rows="5"
+                placeholder="Write announcement here..."
+              ></textarea>
+
+            </div>
+
+
+            <button
+              type="button"
+              class="admin-primary-btn"
+              onclick="window.addAdminAnnouncement()"
+            >
+              + Add Announcement
+            </button>
+
+
+            <p
+              id="adminAnnouncementMessage"
+              class="admin-message"
+            ></p>
+
+          </div>
+
+
+          <!-- ANNOUNCEMENT LIST -->
+          <div class="admin-form-card">
+
+            <h3>All Announcements</h3>
+
+            <p>
+              Announcements shown to CCUS users.
+            </p>
+
+
+            <div
+              id="adminAnnouncementsList"
+              class="admin-level-list"
+            >
+
+              <div class="admin-empty">
+                <div>📢</div>
+                <h3>Loading Announcements...</h3>
+                <p>Announcements will appear here.</p>
+              </div>
+
+            </div>
+
+          </div>
+
+        </main>
+
+      </div>
+
+
+      <!-- ===================================================
+           CALENDAR
+      ==================================================== -->
+      <div
+        id="adminCalendarSection"
+        class="admin-page-content hidden"
+      >
+
+        <main class="admin-content">
+
+          <div class="admin-section-heading">
+
+            <div>
+
+              <p class="admin-small-title">
+                SETTINGS
+              </p>
+
+              <h2 class="admin-section-title">
+                Calendar
+              </h2>
+
+            </div>
+
+
+            <button
+              type="button"
+              class="admin-view-btn"
+              onclick="window.adminNavigate('dashboard')"
+            >
+              ← Back
+            </button>
+
+          </div>
+
+
+          <!-- GLOBAL STATUS -->
+          <div class="admin-form-card">
+
+            <h3>
+              Global Calendar Status
+            </h3>
+
+            <p>
+              Use this option to close withdrawal operations
+              globally. Recharge remains available.
+            </p>
+
+
+            <div class="admin-input-group">
+
+              <label for="adminCalendarGlobalClosed">
+                Global Status
+              </label>
+
+              <select
+                id="adminCalendarGlobalClosed"
+                onchange="window.toggleGlobalCalendarClosed()"
+              >
+
+                <option value="false">
+                  Open
+                </option>
+
+                <option value="true">
+                  Closed
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <p
+              id="adminCalendarMessage"
+              class="admin-message"
+            ></p>
+
+          </div>
+
+
+          <!-- ADD CALENDAR DATE -->
+          <div class="admin-form-card">
+
+            <h3>
+              Add Calendar Date
+            </h3>
+
+            <p>
+              Add a specific date as Rest Day or Closed Day.
+            </p>
+
+
+            <div class="admin-form-grid">
+
+              <div class="admin-input-group">
+
+                <label for="newCalendarDate">
+                  Date
+                </label>
+
+                <input
+                  type="date"
+                  id="newCalendarDate"
+                >
+
+              </div>
+
+            </div>
+
+
+            <div
+              style="
+                display:flex;
+                gap:10px;
+                flex-wrap:wrap;
+                margin-top:15px;
+              "
+            >
+
+              <button
+                type="button"
+                class="admin-primary-btn"
+                onclick="window.addAdminRestDate()"
+              >
+                🛌 Add Rest Day
+              </button>
+
+
+              <button
+                type="button"
+                class="admin-primary-btn"
+                onclick="window.addAdminClosedDate()"
+              >
+                🔒 Add Closed Day
+              </button>
+
+            </div>
+
+          </div>
+
+
+          <!-- CALENDAR LIST -->
+          <div class="admin-form-card">
+
+            <h3>
+              Scheduled Dates
+            </h3>
+
+            <p>
+              Manage Rest Days and Closed Days.
+            </p>
+
+
+            <div
+              id="adminCalendarList"
+              class="admin-level-list"
+            >
+
+              <div class="admin-empty">
+                <div>📅</div>
+                <h3>Loading Calendar...</h3>
+                <p>Calendar settings will appear here.</p>
+              </div>
+
+            </div>
+
+          </div>
+
+        </main>
+
+      </div>
+
+
+      <!-- ===================================================
+           BOTTOM NAVIGATION
+      ==================================================== -->
+      <nav class="admin-bottom-nav">
+
+        <button
+          type="button"
+          class="admin-nav-item active"
+          onclick="window.adminNavigate('dashboard')"
+        >
+          <span>📊</span>
+          <small>Dashboard</small>
+        </button>
+
+
+        <button
+          type="button"
+          class="admin-nav-item"
+          onclick="window.openAdminSection('recharge')"
+        >
+          <span>💰</span>
+          <small>Recharge</small>
+        </button>
+
+
+        <button
+          type="button"
+          class="admin-nav-item"
+          onclick="window.openAdminSection('withdraw')"
+        >
+          <span>💸</span>
+          <small>Withdraw</small>
+        </button>
+
+
+        <button
+          type="button"
+          class="admin-nav-item"
+          onclick="window.openAdminSection('users')"
+        >
+          <span>👥</span>
+          <small>Users</small>
+        </button>
+
+
+        <button
+          type="button"
+          class="admin-nav-item"
+          onclick="window.openAdminSection('tasks')"
+        >
+          <span>✅</span>
+          <small>Tasks</small>
+        </button>
+
+      </nav>
+
+    </section>
+
+  </div>
+
+
+  <!-- =====================================================
+       ADMIN JAVASCRIPT
+  ====================================================== -->
+  <script
+    type="module"
+    src="./admin.js"
+  ></script>
+
+</body>
+
+</html>
