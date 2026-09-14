@@ -1,24 +1,28 @@
 /* =========================================================
-   GLOBAL RESET & VARIABLES
+   CCUS - GLOBAL CSS
+   Clean / Fixed / Optimized
 ========================================================= */
+
+/* =========================================================
+   GLOBAL RESET
+========================================================= */
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, Helvetica, Arial, sans-serif;
 }
 
 :root {
-  /* Halluuwwan Ijoo (Gold Premium Palette) */
   --gold: #d4af37;
   --gold-light: #fef9e7;
   --gold-soft: #f39c12;
   --gold-primary-grad: linear-gradient(135deg, #f39c12 0%, #d4af37 100%);
 
-  /* Halluu Submit Button (Magariisa) */
   --green-submit-grad: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
 
-  /* Halluu Neutral */
   --dark: #1e1e24;
   --text: #2d3436;
   --muted: #8898aa;
@@ -26,22 +30,25 @@
   --white: #ffffff;
   --border: #edf2f7;
 
-  /* Halluu Status (Pending/Rejected: Diimaa, Successful/Approved: Magariisa) */
   --green: #2ecc71;
   --green-light: #e8f8f5;
+
   --red: #e74c3c;
   --red-light: #fadbd8;
 
-  /* Dynamic Shadows & Glassmorphism */
+  --yellow: #f0a500;
+  --yellow-light: #fff8df;
+
+  --blue: #3498db;
+  --blue-light: #eaf4fb;
+
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 5px 15px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 10px 25px rgba(46, 204, 113, 0.25);
+
   --glass-bg: rgba(255, 255, 255, 0.85);
 }
 
-/* =========================================================
-   HTML / BODY & APP LAYOUT
-========================================================= */
 html {
   scroll-behavior: smooth;
   height: 100%;
@@ -55,6 +62,7 @@ body {
   justify-content: center;
   align-items: flex-start;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .app {
@@ -69,12 +77,13 @@ body {
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.08);
 }
 
-/* =========================================================
-   COMMON ELEMENTS & UTILITIES
-========================================================= */
 .hidden {
   display: none !important;
 }
+
+/* =========================================================
+   BUTTON / FORM RESET
+========================================================= */
 
 button {
   border: none;
@@ -85,13 +94,24 @@ button {
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-input, select {
+input,
+select,
+textarea {
   outline: none;
   font-family: inherit;
   transition: all 0.2s ease;
 }
 
-button, .action-btn, .feature-card, .profile-menu, .wallet-action, .amount-btn, .deposit-payment-method, .nav-item {
+button,
+.action-btn,
+.feature-card,
+.profile-menu,
+.wallet-action,
+.amount-btn,
+.deposit-payment-method,
+.nav-item,
+.notification-btn,
+.announcement-card {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
@@ -104,10 +124,15 @@ button:focus-visible {
 /* =========================================================
    AUTH PAGES
 ========================================================= */
+
 .auth-page {
   min-height: 100vh;
   padding: 50px 24px 30px;
-  background: radial-gradient(circle at top, #fffdf0 0%, #ffffff 80%);
+  background: radial-gradient(
+    circle at top,
+    #fffdf0 0%,
+    #ffffff 80%
+  );
 }
 
 .auth-logo {
@@ -167,6 +192,7 @@ button:focus-visible {
 /* =========================================================
    INPUTS & FORMS
 ========================================================= */
+
 .input-group {
   margin-bottom: 18px;
 }
@@ -188,32 +214,41 @@ button:focus-visible {
 }
 
 .input-group input,
-.personal-field select {
+.personal-field input,
+.personal-field select,
+.input-group select,
+.input-group textarea {
   width: 100%;
-  height: 50px;
+  min-height: 50px;
   border: 1.5px solid #e2e8f0;
   border-radius: 14px;
-  padding: 0 16px;
+  padding: 12px 16px;
   font-size: 14px;
   color: var(--dark);
   background: #f8fafc;
 }
 
 .input-group input:focus,
+.personal-field input:focus,
+.input-group select:focus,
+.input-group textarea:focus,
 .personal-field select:focus {
   border-color: var(--green);
   background: var(--white);
   box-shadow: 0 0 0 4px rgba(46, 204, 113, 0.15);
 }
 
-.input-group input::placeholder {
+.input-group input::placeholder,
+.personal-field input::placeholder,
+.input-group textarea::placeholder {
   color: #a0aec0;
 }
 
 /* =========================================================
-   SUBMIT & PRIMARY BUTTONS (Magariisa)
+   BUTTONS
 ========================================================= */
-.primary-btn, 
+
+.primary-btn,
 button[type="submit"],
 .submit-btn {
   width: 100%;
@@ -230,21 +265,22 @@ button[type="submit"],
   gap: 8px;
 }
 
-.primary-btn:hover, 
+.primary-btn:hover,
 button[type="submit"]:hover,
 .submit-btn:hover {
   opacity: 0.95;
   transform: translateY(-1px);
 }
 
-.primary-btn:active, 
+.primary-btn:active,
 button[type="submit"]:active,
 .submit-btn:active {
   transform: translateY(1px);
 }
 
-.primary-btn:disabled, 
-button[type="submit"]:disabled {
+.primary-btn:disabled,
+button[type="submit"]:disabled,
+.submit-btn:disabled {
   background: #cbd5e1 !important;
   box-shadow: none;
   cursor: not-allowed;
@@ -289,8 +325,9 @@ button[type="submit"]:disabled {
 }
 
 /* =========================================================
-   HOME HEADER & BALANCE CARD
+   HEADER
 ========================================================= */
+
 .header {
   background: var(--gold-primary-grad);
   padding: 28px 20px 30px;
@@ -304,6 +341,7 @@ button[type="submit"]:disabled {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .welcome {
@@ -317,18 +355,91 @@ button[type="submit"]:disabled {
   font-weight: 800;
 }
 
+/* =========================================================
+   NOTIFICATION
+========================================================= */
+
 .notification-btn {
   width: 44px;
   height: 44px;
+  min-width: 44px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.22);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: var(--white);
   font-size: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: visible;
+  z-index: 20;
 }
+
+.notification-btn:hover {
+  background: rgba(255, 255, 255, 0.32);
+  transform: translateY(-1px);
+}
+
+.notification-btn:active {
+  transform: scale(0.95);
+}
+
+.announcement-notification-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #e53935;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  border: 2px solid #ffffff;
+  box-sizing: border-box;
+  z-index: 100;
+  pointer-events: none;
+  box-shadow: 0 2px 7px rgba(229, 57, 53, 0.35);
+  animation: ccusNotificationPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes ccusNotificationPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+#announcementUnreadCount,
+#notificationCount {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #e53935;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* =========================================================
+   BALANCE
+========================================================= */
 
 .balance-card {
   background: var(--white);
@@ -360,6 +471,7 @@ button[type="submit"]:disabled {
 .balance-item h2 {
   font-size: 20px;
   color: var(--dark);
+  word-break: break-word;
 }
 
 .balance-item h2 span {
@@ -368,8 +480,9 @@ button[type="submit"]:disabled {
 }
 
 /* =========================================================
-   SECTIONS & QUICK ACTIONS
+   SECTIONS
 ========================================================= */
+
 .section {
   padding: 24px 20px 0;
 }
@@ -385,6 +498,7 @@ button[type="submit"]:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
 }
 
 .streak {
@@ -395,6 +509,10 @@ button[type="submit"]:disabled {
   padding: 4px 10px;
   border-radius: 20px;
 }
+
+/* =========================================================
+   ACTIONS
+========================================================= */
 
 .actions {
   display: grid;
@@ -430,8 +548,9 @@ button[type="submit"]:disabled {
 }
 
 /* =========================================================
-   DAILY CHECK-IN
+   CHECK-IN
 ========================================================= */
+
 .checkin-card {
   background: var(--white);
   border-radius: 20px;
@@ -472,8 +591,9 @@ button[type="submit"]:disabled {
 }
 
 /* =========================================================
-   FEATURE CARDS & ANNOUNCEMENT
+   FEATURES
 ========================================================= */
+
 .feature-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -485,7 +605,11 @@ button[type="submit"]:disabled {
   padding: 20px;
   border-radius: 20px;
   color: var(--white);
-  background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+  background: linear-gradient(
+    135deg,
+    #2d3748 0%,
+    #1a202c 100%
+  );
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -493,7 +617,11 @@ button[type="submit"]:disabled {
 }
 
 .feature-card:nth-child(even) {
-  background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+  background: linear-gradient(
+    135deg,
+    #4a5568 0%,
+    #2d3748 100%
+  );
 }
 
 .feature-icon {
@@ -511,7 +639,12 @@ button[type="submit"]:disabled {
   line-height: 1.4;
 }
 
+/* =========================================================
+   ANNOUNCEMENTS
+========================================================= */
+
 .announcement {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -520,6 +653,13 @@ button[type="submit"]:disabled {
   border-radius: 18px;
   padding: 16px;
   margin-bottom: 16px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.announcement:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .announcement-icon {
@@ -548,9 +688,199 @@ button[type="submit"]:disabled {
   line-height: 1.4;
 }
 
+.announcement-card {
+  width: 100%;
+  display: block;
+  position: relative;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--text);
+  border-radius: 18px;
+  padding: 17px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+  appearance: none;
+  -webkit-appearance: none;
+  transition: all 0.25s ease;
+}
+
+.announcement-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(243, 156, 18, 0.35);
+  box-shadow: var(--shadow-md);
+}
+
+.announcement-card:active {
+  transform: scale(0.99);
+}
+
+.announcement-card.is-unread {
+  border-left: 4px solid #e53935;
+  background: linear-gradient(
+    90deg,
+    rgba(229, 57, 53, 0.04),
+    #ffffff
+  );
+}
+
+.announcement-card.is-important {
+  border-left: 4px solid var(--gold-soft);
+}
+
+.announcement-content {
+  min-width: 0;
+  padding-right: 34px;
+}
+
+.announcement-content-title {
+  color: var(--dark);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.announcement-content-message {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
+  margin-top: 6px;
+  word-break: break-word;
+}
+
+.announcement-new-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: #e53935;
+  color: #ffffff;
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  box-shadow: 0 2px 6px rgba(229, 57, 53, 0.25);
+}
+
+.announcement-important-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--yellow-light);
+  color: #b8860b;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.announcement-empty {
+  padding: 35px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.announcement-empty-icon {
+  font-size: 42px;
+  margin-bottom: 10px;
+}
+
+.announcement-empty p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 /* =========================================================
-   SIMPLE PAGES & CARDS
+   MODAL & TOAST
 ========================================================= */
+
+#ccusAnnouncementToast {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 30px);
+  max-width: 430px;
+  z-index: 100000;
+  background: #ffffff;
+  color: #222;
+  border-radius: 16px;
+  padding: 15px 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.22);
+  box-sizing: border-box;
+  animation: ccusToastIn 0.25s ease-out;
+}
+
+@keyframes ccusToastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -15px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+#ccusAnnouncementToastClose {
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+  color: #777;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#announcementModal {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.65);
+  box-sizing: border-box;
+}
+
+#announcementModal > div {
+  width: 100%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow: auto;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 22px;
+  box-sizing: border-box;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.3);
+  animation: ccusModalIn 0.2s ease-out;
+}
+
+@keyframes ccusModalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* =========================================================
+   SIMPLE PAGES
+========================================================= */
+
 .simple-page {
   min-height: 100vh;
   background: var(--light);
@@ -587,6 +917,10 @@ button[type="submit"]:disabled {
   justify-content: center;
 }
 
+.back-btn:hover {
+  background: #e9eef5;
+}
+
 .simple-content {
   padding: 20px;
 }
@@ -614,8 +948,80 @@ button[type="submit"]:disabled {
 }
 
 /* =========================================================
-   WALLET PAGE
+   DAILY TASKS
 ========================================================= */
+
+.task-list {
+  width: 100%;
+}
+
+.task-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.task-card h3 {
+  color: var(--dark);
+  font-size: 16px;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.task-card p {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.task-card > div {
+  margin-top: 10px;
+  color: var(--gold-soft);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.task-claim-btn {
+  min-height: 44px;
+  font-weight: 700;
+}
+
+.task-message {
+  min-height: 18px;
+  font-size: 12px !important;
+}
+
+#taskStatusCard {
+  text-align: center;
+}
+
+#taskStatusCard .large-icon {
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  background: var(--gold-light);
+  font-size: 30px;
+}
+
+#taskStatusTitle {
+  color: var(--dark);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+#taskStatusMessage {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* =========================================================
+   WALLET
+========================================================= */
+
 .wallet-balance-card {
   background: var(--white);
   border-radius: 22px;
@@ -689,8 +1095,9 @@ button[type="submit"]:disabled {
 }
 
 /* =========================================================
-   PROFILE PAGE & MENUS
+   PROFILE
 ========================================================= */
+
 .profile-header {
   position: relative;
   text-align: center;
@@ -735,6 +1142,11 @@ button[type="submit"]:disabled {
   border: 1px solid var(--border);
 }
 
+.profile-menu:hover {
+  transform: translateY(-1px);
+  border-color: rgba(243, 156, 18, 0.35);
+}
+
 .menu-left {
   display: flex;
   align-items: center;
@@ -768,6 +1180,7 @@ button[type="submit"]:disabled {
 .info-row {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
   padding: 14px 0;
   border-bottom: 1px solid var(--border);
 }
@@ -780,11 +1193,90 @@ button[type="submit"]:disabled {
 .info-row strong {
   color: var(--dark);
   font-size: 12px;
+  text-align: right;
+  word-break: break-word;
 }
 
 /* =========================================================
-   RECHARGE, AMOUNTS & PAYMENT METHODS
+   PERSONAL INFORMATION
 ========================================================= */
+
+.personal-info-card {
+  max-width: 100%;
+}
+
+.personal-info-icon {
+  width: 58px;
+  height: 58px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  background: var(--gold-light);
+  font-size: 30px;
+}
+
+.personal-info-card > h3,
+.personal-info-card > .personal-info-subtitle {
+  text-align: center;
+}
+
+.personal-info-subtitle {
+  margin-bottom: 20px;
+}
+
+.personal-field {
+  margin-bottom: 16px;
+}
+
+.personal-field label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--dark);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.personal-field input,
+.personal-field select {
+  min-height: 50px;
+}
+
+.save-btn {
+  width: 100%;
+  min-height: 50px;
+  margin-top: 6px;
+  border-radius: 14px;
+  background: var(--green-submit-grad);
+  color: var(--white);
+  font-size: 15px;
+  font-weight: 800;
+  box-shadow: var(--shadow-lg);
+}
+
+.save-btn:hover {
+  transform: translateY(-1px);
+  opacity: 0.95;
+}
+
+.save-btn:disabled {
+  background: #cbd5e1;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+#personalInfoMessage {
+  margin-top: 12px;
+  min-height: 20px;
+  text-align: center;
+  font-size: 12px;
+}
+
+/* =========================================================
+   RECHARGE
+========================================================= */
+
 .amount-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -800,6 +1292,10 @@ button[type="submit"]:disabled {
   font-size: 14px;
   font-weight: 700;
   border: 1.5px solid var(--border);
+}
+
+.amount-btn:hover {
+  border-color: var(--gold);
 }
 
 .amount-btn.active {
@@ -845,8 +1341,9 @@ button[type="submit"]:disabled {
 }
 
 /* =========================================================
-   TRANSACTION & RECHARGE / WITHDRAWAL HISTORY STYLING
+   HISTORY & STATUS
 ========================================================= */
+
 .history-item {
   width: 100%;
   display: flex;
@@ -861,6 +1358,10 @@ button[type="submit"]:disabled {
   box-shadow: var(--shadow-sm);
   border-left: 5px solid var(--muted);
   transition: all 0.25s ease;
+}
+
+.history-info {
+  min-width: 0;
 }
 
 .history-info strong {
@@ -888,6 +1389,7 @@ button[type="submit"]:disabled {
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .history-right > strong {
@@ -908,7 +1410,8 @@ button[type="submit"]:disabled {
   justify-content: center;
 }
 
-/* Pending & Rejected: Halluu Diimaa */
+/* Pending / Rejected */
+
 .history-status.pending,
 .history-status.rejected,
 .status-pending,
@@ -937,10 +1440,15 @@ button[type="submit"]:disabled {
 .history-item.pending,
 .history-item.rejected {
   border-left-color: var(--red) !important;
-  background: linear-gradient(90deg, rgba(231, 76, 60, 0.03) 0%, var(--white) 100%);
+  background: linear-gradient(
+    90deg,
+    rgba(231, 76, 60, 0.03) 0%,
+    var(--white) 100%
+  );
 }
 
-/* Approved & Successful: Halluu Magariisa */
+/* Approved / Successful */
+
 .history-status.approved,
 .history-status.successful,
 .status-approved,
@@ -969,12 +1477,122 @@ button[type="submit"]:disabled {
 .history-item.approved,
 .history-item.successful {
   border-left-color: var(--green) !important;
-  background: linear-gradient(90deg, rgba(46, 204, 113, 0.03) 0%, var(--white) 100%);
+  background: linear-gradient(
+    90deg,
+    rgba(46, 204, 113, 0.03) 0%,
+    var(--white) 100%
+  );
+}
+
+/* =========================================================
+   REFERRAL / TEAM
+========================================================= */
+
+.referral-code-card {
+  text-align: center;
+  background: linear-gradient(
+    135deg,
+    #fffdf0 0%,
+    #ffffff 100%
+  );
+}
+
+.referral-code-card h3 {
+  margin-bottom: 8px;
+}
+
+.referral-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
+  padding: 12px 20px;
+  margin-top: 8px;
+  border-radius: 14px;
+  background: var(--gold-light);
+  color: var(--gold-soft);
+  border: 1px dashed var(--gold);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.team-level-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.team-level-card:hover {
+  border-color: rgba(243, 156, 18, 0.35);
+  transform: translateY(-1px);
+}
+
+.team-level-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--gold-light);
+  color: var(--gold-soft);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.team-level-details {
+  margin-top: 10px;
+}
+
+.team-level-details strong {
+  color: var(--dark);
+  font-size: 14px;
+}
+
+.team-level-details p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.commission-history {
+  margin-top: 10px;
+}
+
+/* =========================================================
+   VIP
+========================================================= */
+
+.vip-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 18px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.vip-card h3 {
+  color: var(--dark);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.vip-card p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 /* =========================================================
    BOTTOM NAVIGATION
 ========================================================= */
+
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -985,6 +1603,7 @@ button[type="submit"]:disabled {
   height: 70px;
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -1004,6 +1623,7 @@ button[type="submit"]:disabled {
   justify-content: center;
   gap: 4px;
   border-radius: 12px;
+  position: relative;
 }
 
 .nav-item span {
@@ -1021,17 +1641,68 @@ button[type="submit"]:disabled {
 }
 
 /* =========================================================
+   LOADING
+========================================================= */
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #edf2f7;
+  border-top-color: var(--gold-soft);
+  border-radius: 50%;
+  animation: ccusSpinner 0.8s linear infinite;
+}
+
+@keyframes ccusSpinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+
+.empty-state {
+  padding: 25px 15px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty-state h3 {
+  color: var(--dark);
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+
+.empty-state p {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* =========================================================
    RESPONSIVE DESIGN
 ========================================================= */
+
 @media (max-width: 380px) {
+
   .actions {
     gap: 8px;
   }
-  
+
   .action-btn {
     padding: 12px 4px;
   }
-  
+
   .action-btn span {
     font-size: 22px;
   }
@@ -1039,4 +1710,91 @@ button[type="submit"]:disabled {
   .balance-item h2 {
     font-size: 17px;
   }
+
+  .notification-btn {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+  }
+
+  .announcement-card {
+    padding: 15px;
+  }
+
+  .simple-content {
+    padding: 16px;
+  }
+
+  .wallet-balance-card {
+    gap: 10px;
+    padding: 18px 14px;
+  }
+
+  .wallet-balance-item strong {
+    font-size: 16px;
+  }
 }
+
+@media (max-width: 330px) {
+
+  .header,
+  .section {
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+
+  .header h1 {
+    font-size: 22px;
+  }
+
+  .balance-card {
+    padding: 16px;
+  }
+
+  .actions {
+    gap: 6px;
+  }
+
+  .action-btn small {
+    font-size: 9px;
+  }
+
+  .simple-content {
+    padding: 14px;
+  }
+
+  .wallet-balance-card {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .wallet-divider {
+    width: 100%;
+    height: 1px;
+  }
+
+  .history-item {
+    gap: 8px;
+    padding: 13px;
+  }
+
+  .history-right > strong {
+    font-size: 13px;
+  }
+}
+
+/* =========================================================
+   ACCESSIBILITY / REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+   }
