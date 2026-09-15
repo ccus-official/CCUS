@@ -431,35 +431,95 @@ function renderRechargeHistory(recs) {
     </div>`).join("");
 }
 
-/* Withdraw System */
-function loadWithdrawLevels() {
-  const container = $("withdrawAmountList"); if (!container) return;
-  if (unsubs.withdrawLevels) unsubs.withdrawLevels();
-  unsubs.withdrawLevels = onSnapshot(collection(db, "withdrawLevels"), snap => {
-    withdrawLevels = [];
-    snap.forEach(d => { if (d.data()?.active !== false && Number(d.data().amount || 0) > 0) withdrawLevels.push({ id: d.id, amount: Number(d.data().amount), order: Number(d.data().order ?? 9999) }); });
-    withdrawLevels.sort((a,b) => a.order - b.order);
-    renderWithdrawLevels();
-  });
+/* =========================================================
+   CCUS - WITHDRAW SYSTEM (Optimized)
+   Hours: 9:00 AM - 5:30 PM EAT (UTC+3)
+========================================================= */
+
+// --- Helper: Time & Operating Checks ---
+function isWithdrawalTimeOpen() {
+  const now = new Date();
+  const ethiopiaMinutes = (now.getUTCHours() * 60 + now.getUTCMinutes() + 180) % 1440;
+  return ethiopiaMinutes >= 540 && ethiopiaMinutes < 1050; // 09:00 (540m) to 17:30 (1050m)
 }
 
+function getWithdrawalOperatingMessage() {
+  return "Withdrawal is available from 9:00 AM to 5:30 PM EAT (UTC+3).";
+}
+
+async function checkWithdrawalAllowed() {
+  if (!isWithdrawalTimeOpen()) {
+    showMessage(getWithdrawalOperatingMessage());
+    return false;
+  }
+  const st = await getTodayOperatingStatus();
+  if (!st.allowed) {
+    showMessage(st.message);
+    return false;
+  }
+  return true;
+}
+
+// --- Load Withdrawal Levels ---
+function loadWithdrawLevels() {
+  const container = $("withdrawAmountList");
+  if (!container) return;
+
+  if (unsubs.withdrawLevels) unsubs.withdrawLevels();
+
+  unsubs.withdrawLevels = onSnapshot(
+    collection(db, "withdrawLevels"),
+    snap => {
+      withdrawLevels = [];
+      snap.forEach(d => {
+        const data = d.data() || {};
+        const amount = Number(data.amount || 0);
+        if (data.active !== false && amount > 0) {
+          withdrawLevels.push({ id: d.id, amount, order: Number(data.order ?? 9999) });
+        }
+      });
+      withdrawLevels.sort((a, b) => a.order - b.order);
+      renderWithdrawLevels();
+    },
+    err => {
+      console.error("Withdraw levels listener error:", err);
+      container.innerHTML = `<p style="text-align:center;color:#c62828;">Unable to load withdrawal options.</p>`;
+    }
+  );
+}
+
+// --- Render Withdrawal Levels ---
 function renderWithdrawLevels() {
-  const container = $("withdrawAmountList"); if (!container) return;
-  container.innerHTML = withdrawLevels.length === 0 ? `<p style="text-align:center;color:#777;">No withdrawal options available.</p>` : "";
+  const container = $("withdrawAmountList");
+  if (!container) return;
+
+  if (!withdrawLevels?.length) {
+    container.innerHTML = `<p style="text-align:center;color:#777;">No withdrawal options available.</p>`;
+    return;
+  }
+
+  container.innerHTML = "";
   withdrawLevels.forEach(lvl => {
-    const btn = document.createElement("button"); btn.type = "button"; btn.className = "amount-btn"; btn.textContent = `ETB ${money(lvl.amount)}`;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "amount-btn";
+    btn.textContent = `ETB ${money(lvl.amount)}`;
+
     btn.onclick = async () => {
-      const st = await getTodayOperatingStatus();
-      if (!st.allowed) return showMessage(st.message);
+      if (!(await checkWithdrawalAllowed())) return;
+
       selectedWithdrawAmount = lvl.amount;
       if ($("withdrawAmount")) $("withdrawAmount").value = lvl.amount;
+
       container.querySelectorAll(".amount-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
     };
+
     container.appendChild(btn);
   });
 }
 
+// --- Reset Page ---
 function resetWithdrawPage() {
   selectedWithdrawAmount = 0;
   if ($("withdrawAmount")) $("withdrawAmount").value = "";
@@ -467,55 +527,121 @@ function resetWithdrawPage() {
   hideElement("withdrawPending");
 }
 
+// --- Submit Withdrawal ---
 window.submitWithdraw = async () => {
   if (!currentUser || window._ccusWithdrawSubmitting) return;
-  const opStatus = await getTodayOperatingStatus();
-  if (!opStatus.allowed) return showMessage(opStatus.message);
 
-  const amt = Number($("withdrawAmount")?.value || selectedWithdrawAmount), pwd = $("withdrawPassword")?.value?.trim();
-  if (amt <= 0 || !pwd) return showMessage(amt <= 0 ? "Enter valid withdrawal amount." : "Enter your password.");
+  if (!(await checkWithdrawalAllowed())) return;
+
+  const amt = Number($("withdrawAmount")?.value || selectedWithdrawAmount);
+  const pwd = $("withdrawPassword")?.value?.trim();
+
+  if (amt <= 0 || !pwd) {
+    return showMessage(amt <= 0 ? "Enter valid withdrawal amount." : "Enter your password.");
+  }
 
   window._ccusWithdrawSubmitting = true;
+
   try {
-    await reauthenticateWithCredential(currentUser, EmailAuthProvider.credential(currentUser.email, pwd));
-    const userRef = doc(db, "users", currentUser.uid), withdrawRef = doc(collection(db, "withdrawRequests"));
-    
+    if (!currentUser.email) {
+      throw new Error("Email authentication is required for withdrawal.");
+    }
+
+    await reauthenticateWithCredential(
+      currentUser,
+      EmailAuthProvider.credential(currentUser.email, pwd)
+    );
+
+    const userRef = doc(db, "users", currentUser.uid);
+    const withdrawRef = doc(collection(db, "withdrawRequests"));
+
     await runTransaction(db, async transaction => {
       const uSnap = await transaction.get(userRef);
       if (!uSnap.exists()) throw new Error("User profile not found.");
-      const uData = uSnap.data(), bal = Number(uData.totalBalance || 0);
+
+      const uData = uSnap.data() || {};
+      const bal = Number(uData.totalBalance || 0);
+
       if (amt > bal) throw new Error("Insufficient balance.");
-      
-      transaction.update(userRef, { totalBalance: bal - amt, updatedAt: serverTimestamp() });
+
+      // Deduct balance & create request
+      transaction.update(userRef, {
+        totalBalance: bal - amt,
+        updatedAt: serverTimestamp()
+      });
+
       transaction.set(withdrawRef, {
-        userId: currentUser.uid, userEmail: currentUser.email || "", userName: uData.fullName || "",
-        amount: amt, paymentMethod: uData.withdrawPaymentMethod || "Standard", accountNumber: uData.accountNumber || uData.withdrawAccountNumber || "",
-        status: "pending", createdAt: serverTimestamp()
+        userId: currentUser.uid,
+        userEmail: currentUser.email || "",
+        userName: uData.fullName || "",
+        amount: amt,
+        paymentMethod: uData.withdrawPaymentMethod || "Standard",
+        accountNumber: uData.accountNumber || uData.withdrawAccountNumber || "",
+        status: "pending",
+        balanceDeducted: true,
+        createdAt: serverTimestamp()
       });
     });
-    showElement("withdrawPending"); updateUserUI();
-  } catch (err) { showMessage(firebaseErrorMessage(err)); } 
-  finally { window._ccusWithdrawSubmitting = false; }
+
+    showElement("withdrawPending");
+    updateUserUI();
+  } catch (err) {
+    console.error("Withdrawal submission error:", err);
+    showMessage(firebaseErrorMessage(err));
+  } finally {
+    window._ccusWithdrawSubmitting = false;
+  }
 };
 
+// --- Load Withdrawal History ---
 function loadWithdrawHistory() {
-  const container = $("withdrawHistory"); if (!container || !currentUser) return;
+  const container = $("withdrawHistory");
+  if (!container || !currentUser) return;
+
   if (unsubs.withdrawHistory) unsubs.withdrawHistory();
-  unsubs.withdrawHistory = onSnapshot(query(collection(db, "withdrawRequests"), where("userId", "==", currentUser.uid)), snap => {
-    const recs = []; snap.forEach(d => recs.push({ id: d.id, ...d.data() }));
-    recs.sort((a,b) => getTime(b.createdAt) - getTime(a.createdAt));
-    renderWithdrawHistory(recs);
-  });
+
+  unsubs.withdrawHistory = onSnapshot(
+    query(collection(db, "withdrawRequests"), where("userId", "==", currentUser.uid)),
+    snap => {
+      const recs = [];
+      snap.forEach(d => recs.push({ id: d.id, ...d.data() }));
+      recs.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
+      renderWithdrawHistory(recs);
+    },
+    err => {
+      console.error("Withdraw history listener error:", err);
+      container.innerHTML = `<div class="empty-transactions"><h3>Unable to load withdrawal history</h3></div>`;
+    }
+  );
 }
 
+// --- Render Withdrawal History ---
 function renderWithdrawHistory(recs) {
-  const container = $("withdrawHistory"); if (!container) return;
-  if (!recs?.length) return container.innerHTML = `<div class="empty-transactions"><h3>No withdrawal transactions found</h3></div>`;
-  container.innerHTML = recs.map(r => `
-    <div class="history-item ${String(r.status||"pending").toLowerCase()}">
-      <div class="history-info"><strong>Withdrawal Request</strong><span>Method: ${escapeHtml(r.paymentMethod||"Standard")}</span></div>
-      <div class="history-right"><strong>ETB ${money(r.amount)}</strong><span class="history-status ${String(r.status||"pending").toLowerCase()}">${escapeHtml(r.status||"pending")}</span></div>
-    </div>`).join("");
+  const container = $("withdrawHistory");
+  if (!container) return;
+
+  if (!recs?.length) {
+    container.innerHTML = `<div class="empty-transactions"><h3>No withdrawal transactions found</h3></div>`;
+    return;
+  }
+
+  container.innerHTML = recs.map(r => {
+    const status = String(r.status || "pending").toLowerCase();
+    const escStatus = escapeHtml(status);
+
+    return `
+      <div class="history-item ${escStatus}">
+        <div class="history-info">
+          <strong>Withdrawal Request</strong>
+          <span>Method: ${escapeHtml(r.paymentMethod || "Standard")}</span>
+        </div>
+        <div class="history-right">
+          <strong>ETB ${money(r.amount)}</strong>
+          <span class="history-status ${escStatus}">${escStatus}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
 }
 
 /* VIP System */
