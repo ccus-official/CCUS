@@ -1,18 +1,50 @@
 /* =========================================================
-   CCUS - admin.js (Optimized & Standardized)
-   ========================================================= */
+   CCUS - admin.js
+   COMPLETE STABLE ADMIN PANEL
+   Firebase JS SDK 10.8.0
+========================================================= */
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+
+/* =========================================================
+   FIREBASE IMPORTS
+========================================================= */
+
 import {
-  getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
 import {
-  getFirestore, collection, doc, getDoc, getDocs, addDoc, setDoc,
-  updateDoc, deleteDoc, query, orderBy, where, limit, onSnapshot,
-  serverTimestamp, runTransaction
+  getFirestore,
+  collection,
+  collectionGroup,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
+  runTransaction,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-/* FIREBASE CONFIG */
+
+/* =========================================================
+   FIREBASE CONFIG
+========================================================= */
+
 const firebaseConfig = {
   apiKey: "AIzaSyBzUV7DuR87GmVwvbzwww_tfxlpzfBMp6k",
   authDomain: "ccus-6900f.firebaseapp.com",
@@ -20,1349 +52,9957 @@ const firebaseConfig = {
   storageBucket: "ccus-6900f.firebasestorage.app",
   messagingSenderId: "42142918720",
   appId: "1:42142918720:web:d2b907be0bb8c1575097a5",
-  measurementId: "G-CP5G5Q4M96N"
+  measurementId: "G-CP5GQ4M96N"
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
 
-/* STATE */
+/* =========================================================
+   FIREBASE INITIALIZATION
+========================================================= */
+
+const app =
+  initializeApp(firebaseConfig);
+
+const auth =
+  getAuth(app);
+
+const db =
+  getFirestore(app);
+
+
+/* =========================================================
+   GLOBAL STATE
+========================================================= */
+
 let currentAdmin = null;
+
 let unsubscribes = [];
 
-/* HELPERS */
-const $ = (id) => document.getElementById(id);
-const safeNumber = (val) => { const n = Number(val); return Number.isFinite(n) ? n : 0; };
-const money = (val) => `Br ${safeNumber(val).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const escapeHTML = (val) => String(val ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+let incomeLevelsCache = [];
 
-function formatDate(ts) {
-  if (!ts) return "—";
+
+/* =========================================================
+   DOM HELPER
+========================================================= */
+
+const $ = id =>
+  document.getElementById(id);
+
+
+/* =========================================================
+   MULTI-ID HELPER
+========================================================= */
+
+function getElementByIds(...ids) {
+
+  for (const id of ids) {
+
+    const element =
+      $(id);
+
+    if (element) {
+      return element;
+    }
+  }
+
+  return null;
+}
+
+
+/* =========================================================
+   SAFE NUMBER
+========================================================= */
+
+function safeNumber(value) {
+
+  const number =
+    Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : 0;
+}
+/* =========================================================
+   MONEY
+========================================================= */
+
+function money(value) {
+
+  return safeNumber(value)
+    .toFixed(2);
+}
+
+
+function formatAdminMoney(value) {
+
+  return safeNumber(value)
+    .toLocaleString(
+      "en-US",
+      {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }
+    );
+}
+
+
+/* =========================================================
+   ESCAPE HTML
+========================================================= */
+
+function escapeHTML(value) {
+
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+
+/* =========================================================
+   TIMESTAMP HELPER
+========================================================= */
+
+function getMillis(value) {
+
+  if (!value) {
+    return 0;
+  }
+
+  if (
+    typeof value.toMillis ===
+    "function"
+  ) {
+    return value.toMillis();
+  }
+
+  if (
+    value instanceof Date
+  ) {
+    return value.getTime();
+  }
+
+  if (
+    typeof value === "number"
+  ) {
+    return value;
+  }
+
+  const parsed =
+    new Date(value).getTime();
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
+}
+
+
+/* =========================================================
+   DATE FORMAT
+========================================================= */
+
+function formatDate(value) {
+
+  const millis =
+    getMillis(value);
+
+  if (!millis) {
+    return "—";
+  }
+
   try {
-    const d = ts.toDate ? ts.toDate() : new Date(ts);
-    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
-  } catch { return "—"; }
+
+    return new Intl.DateTimeFormat(
+      "en-GB",
+      {
+        dateStyle: "medium",
+        timeStyle: "short"
+      }
+    ).format(
+      new Date(millis)
+    );
+
+  } catch {
+
+    return new Date(millis)
+      .toLocaleString();
+  }
 }
 
-function getMillis(ts) {
-  try {
-    if (!ts) return 0;
-    if (typeof ts.toMillis === "function") return ts.toMillis();
-    if (typeof ts.toDate === "function") return ts.toDate().getTime();
-    const val = new Date(ts).getTime();
-    return Number.isFinite(val) ? val : 0;
-  } catch { return 0; }
+
+/* =========================================================
+   CLEAR INPUTS
+========================================================= */
+
+function clearInputs(...ids) {
+
+  ids.forEach(id => {
+
+    const element =
+      $(id);
+
+    if (!element) {
+      return;
+    }
+
+    if (
+      element.type ===
+      "checkbox"
+    ) {
+      element.checked = false;
+    } else {
+      element.value = "";
+    }
+  });
 }
 
-function showMessage(id, msg, type = "") {
-  const el = $(id);
-  if (el) { el.textContent = msg; el.className = `admin-message ${type}`.trim(); }
+
+/* =========================================================
+   SHOW MESSAGE
+========================================================= */
+
+function showMessage(
+  elementId,
+  message,
+  type = "info"
+) {
+
+  const element =
+    $(elementId);
+
+  if (!element) {
+    console.warn(
+      "Message element not found:",
+      elementId,
+      message
+    );
+    return;
+  }
+
+  element.textContent =
+    message;
+
+  element.className =
+    `admin-message ${type}`;
+
+  element.hidden = false;
+
+  return element;
 }
 
-function setElementText(id, val) { const el = $(id); if (el) el.textContent = val; }
-function clearInputs(ids) { ids.forEach(id => { const el = $(id); if (el) el.value = ""; }); }
 
-/* AUTH & PERMISSION */
+/* =========================================================
+   SET TEXT
+========================================================= */
+
+function setElementText(
+  id,
+  value
+) {
+
+  const element =
+    $(id);
+
+  if (element) {
+    element.textContent =
+      value ?? "";
+  }
+}
+
+
+/* =========================================================
+   LOADING HTML
+========================================================= */
+
+function loadingHTML(
+  icon = "⏳",
+  message = "Loading..."
+) {
+
+  return `
+    <div class="admin-loading">
+      <div class="admin-loading-icon">
+        ${escapeHTML(icon)}
+      </div>
+      <p>${escapeHTML(message)}</p>
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   EMPTY HTML
+========================================================= */
+
+function emptyHTML(
+  icon = "📭",
+  title = "No Data",
+  message = ""
+) {
+
+  return `
+    <div class="admin-empty">
+      <div class="admin-empty-icon">
+        ${escapeHTML(icon)}
+      </div>
+
+      <h3>
+        ${escapeHTML(title)}
+      </h3>
+
+      ${
+        message
+          ? `<p>${escapeHTML(message)}</p>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   ERROR HTML
+========================================================= */
+
+function errorHTML(
+  message
+) {
+
+  return `
+    <div class="admin-error">
+      <strong>⚠️ Error</strong>
+      <p>
+        ${escapeHTML(
+          message ||
+          "Something went wrong."
+        )}
+      </p>
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   STOP SECTION LISTENERS
+========================================================= */
+
+function stopAllListeners() {
+
+  if (
+    !Array.isArray(
+      unsubscribes
+    )
+  ) {
+    unsubscribes = [];
+    return;
+  }
+
+  unsubscribes.forEach(
+    unsubscribe => {
+
+      try {
+
+        if (
+          typeof unsubscribe ===
+          "function"
+        ) {
+          unsubscribe();
+        }
+
+      } catch (error) {
+
+        console.warn(
+          "Listener unsubscribe error:",
+          error
+        );
+      }
+    }
+  );
+
+  unsubscribes = [];
+}
+
+
+/* =========================================================
+   ADMIN AUTHORIZATION
+========================================================= */
+
 async function requireAdmin(user) {
-  if (!user) return false;
+
+  if (!user) {
+    return false;
+  }
+
   try {
-    const snap = await getDoc(doc(db, "users", user.uid));
-    return snap.exists() && snap.data().isAdmin === true;
-  } catch (err) {
-    console.error("Admin verification error:", err);
+
+    const userRef =
+      doc(
+        db,
+        "users",
+        user.uid
+      );
+
+    const snap =
+      await getDoc(
+        userRef
+      );
+
+    if (!snap.exists()) {
+      return false;
+    }
+
+    const data =
+      snap.data() || {};
+
+    return (
+      data.isAdmin === true ||
+      data.role === "admin"
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Admin authorization error:",
+      error
+    );
+
     return false;
   }
 }
 
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    currentAdmin = null;
-    $("adminLoginPage")?.classList.remove("hidden");
-    $("adminDashboardPage")?.classList.add("hidden");
-    stopAllListeners();
+
+/* =========================================================
+   HIDE / SHOW SECTION
+========================================================= */
+
+function hideSection(element) {
+
+  if (!element) {
     return;
   }
 
-  const allowed = await requireAdmin(user);
-  if (!allowed) {
-    await signOut(auth);
-    currentAdmin = null;
-    $("adminLoginPage")?.classList.remove("hidden");
-    $("adminDashboardPage")?.classList.add("hidden");
-    stopAllListeners();
-    showMessage("adminLoginMessage", "You do not have admin permission.", "error");
-    return;
-  }
+  element.hidden = true;
 
-  currentAdmin = user;
-  $("adminLoginPage")?.classList.add("hidden");
-  $("adminDashboardPage")?.classList.remove("hidden");
-
-  ensureAdminAnnouncementCalendarSections();
-  ensureAdminGTeamDepositSection();
-  adminNavigate("dashboard");
-});
-
-window.adminLogin = async function () {
-  const email = $("adminEmail")?.value.trim();
-  const password = $("adminPassword")?.value;
-  if (!email || !password) return showMessage("adminLoginMessage", "Please enter email and password.", "error");
-
-  showMessage("adminLoginMessage", "Signing in...");
-  try {
-    const credential = await signInWithEmailAndPassword(auth, email, password);
-    const allowed = await requireAdmin(credential.user);
-    if (!allowed) {
-      await signOut(auth);
-      return showMessage("adminLoginMessage", "This account is not an admin account.", "error");
-    }
-    showMessage("adminLoginMessage", "Login successful.", "success");
-  } catch (err) {
-    showMessage("adminLoginMessage", err.message || "Login failed.", "error");
-  }
-};
-
-window.adminLogout = async function () {
-  try {
-    stopAllListeners();
-    await signOut(auth);
-    currentAdmin = null;
-  } catch (err) { console.error("Logout error:", err); }
-};
-
-function stopAllListeners() {
-  unsubscribes.forEach(unsub => { if (typeof unsub === "function") unsub(); });
-  unsubscribes = [];
+  element.classList.add(
+    "hidden"
+  );
 }
 
-/* NAVIGATION */
-window.adminNavigate = function (section) {
-  if (!currentAdmin) return;
-  ensureAdminAnnouncementCalendarSections();
-  ensureAdminGTeamDepositSection();
+
+function showSection(element) {
+
+  if (!element) {
+    return;
+  }
+
+  element.hidden = false;
+
+  element.classList.remove(
+    "hidden"
+  );
+}
+
+
+/* =========================================================
+   DYNAMIC INCOME SECTION
+   ========================================================= */
+
+function ensureAdminIncomeLevelsSection() {
+
+  const parent =
+    $("adminDashboardPage") ||
+    document.body;
+
+  let section =
+    $("adminIncomeLevelsSection");
+
+  /* -------------------------------------------------------
+     CREATE SECTION ONLY IF IT DOES NOT EXIST
+  ------------------------------------------------------- */
+
+  if (!section) {
+
+    section =
+      document.createElement("section");
+
+    section.id =
+      "adminIncomeLevelsSection";
+
+    section.className =
+      "admin-section admin-page-content hidden";
+
+    section.hidden = true;
+
+    parent.appendChild(section);
+  }
+
+  /* -------------------------------------------------------
+     CREATE CONTENT ONLY IF LIST DOES NOT EXIST
+  ------------------------------------------------------- */
+
+  if (!$("adminIncomeLevelsList")) {
+
+    section.innerHTML = `
+
+      <div class="admin-section-header">
+
+        <div>
+
+          <h2>
+            📊 Income Levels
+          </h2>
+
+          <p>
+            Manage price, daily,
+            monthly and yearly income.
+          </p>
+
+        </div>
+
+        <button
+          type="button"
+          class="admin-primary-btn"
+          onclick="window.openAdminIncomeLevelForm?.()"
+        >
+          + Add Income Level
+        </button>
+
+      </div>
+
+      <div
+        id="adminIncomeLevelForm"
+        class="hidden"
+        hidden
+      ></div>
+
+      <div
+        id="adminIncomeLevelsList"
+        class="admin-list"
+      ></div>
+
+    `;
+  }
+
+  return section;
+}
+
+
+/* =========================================================
+   TEAM DEPOSIT SECTION CHECK
+   ========================================================= */
+
+window.ensureAdminTeamDepositSection =
+  function () {
+
+    const section =
+      $("adminTeamDepositLevelsSection");
+
+    if (!section) {
+
+      console.warn(
+        "⚠️ adminTeamDepositLevelsSection not found in HTML."
+      );
+
+      return false;
+    }
+
+    return true;
+  };
+
+
+/* =========================================================
+   TEAM DEPOSIT SECTION ALIASES
+   ========================================================= */
+
+window.loadTeamDepositLevels =
+  function () {
+
+    if (
+      typeof loadAdminTeamDepositLevels ===
+      "function"
+    ) {
+
+      return loadAdminTeamDepositLevels();
+
+    }
+
+    console.error(
+      "❌ loadAdminTeamDepositLevels() not found."
+    );
+
+  };
+
+
+window.loadGTeamDepositLevels =
+  function () {
+
+    if (
+      typeof loadAdminTeamDepositLevels ===
+      "function"
+    ) {
+
+      return loadAdminTeamDepositLevels();
+
+    }
+
+    console.error(
+      "❌ loadAdminTeamDepositLevels() not found."
+    );
+
+  };
+
+
+/* =========================================================
+   ADMIN LOADER COMPATIBILITY
+   IMPORTANT:
+   admin.js IS type="module".
+   Module functions are NOT automatically window.*
+   ========================================================= */
+
+function exposeAdminLoaders() {
+
+  /* -------------------------------------------------------
+     DASHBOARD
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminDashboard ===
+    "function"
+  ) {
+
+    window.loadAdminDashboard =
+      loadAdminDashboard;
+
+  }
+
+
+  /* -------------------------------------------------------
+     RECHARGE REQUESTS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminRechargeRequests ===
+    "function"
+  ) {
+
+    window.loadAdminRechargeRequests =
+      loadAdminRechargeRequests;
+
+  }
+
+
+  /* -------------------------------------------------------
+     WITHDRAW REQUESTS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminWithdrawRequests ===
+    "function"
+  ) {
+
+    window.loadAdminWithdrawRequests =
+      loadAdminWithdrawRequests;
+
+  }
+
+
+  /* -------------------------------------------------------
+     VIP LEVELS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminVipLevels ===
+    "function"
+  ) {
+
+    window.loadAdminVipLevels =
+      loadAdminVipLevels;
+
+    window.loadVipLevels =
+      loadAdminVipLevels;
+
+  }
+
+
+  /* -------------------------------------------------------
+     RECHARGE LEVELS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminRechargeLevels ===
+    "function"
+  ) {
+
+    window.loadAdminRechargeLevels =
+      loadAdminRechargeLevels;
+
+    window.loadRechargeLevels =
+      loadAdminRechargeLevels;
+
+  }
+
+
+  /* -------------------------------------------------------
+     WITHDRAW LEVELS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminWithdrawLevels ===
+    "function"
+  ) {
+
+    window.loadAdminWithdrawLevels =
+      loadAdminWithdrawLevels;
+
+    window.loadWithdrawLevels =
+      loadAdminWithdrawLevels;
+
+  }
+
+
+  /* -------------------------------------------------------
+     TEAM DEPOSIT LEVELS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminTeamDepositLevels ===
+    "function"
+  ) {
+
+    window.loadAdminTeamDepositLevels =
+      loadAdminTeamDepositLevels;
+
+  }
+
+
+  /* -------------------------------------------------------
+     PAYMENT METHODS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminPaymentMethods ===
+    "function"
+  ) {
+
+    window.loadAdminPaymentMethods =
+      loadAdminPaymentMethods;
+
+    window.loadPaymentMethods =
+      loadAdminPaymentMethods;
+
+  }
+
+
+  /* -------------------------------------------------------
+     USERS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminUsers ===
+    "function"
+  ) {
+
+    window.loadAdminUsers =
+      loadAdminUsers;
+
+    window.loadUsers =
+      loadAdminUsers;
+
+  }
+
+
+  /* -------------------------------------------------------
+     REWARDS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminRewards ===
+    "function"
+  ) {
+
+    window.loadAdminRewards =
+      loadAdminRewards;
+
+  }
+
+
+  /* -------------------------------------------------------
+     TASKS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminTasks ===
+    "function"
+  ) {
+
+    window.loadAdminTasks =
+      loadAdminTasks;
+
+    window.loadTasksAdmin =
+      loadAdminTasks;
+
+  }
+
+
+  /* -------------------------------------------------------
+     TASK SETTINGS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadTaskSettings ===
+    "function"
+  ) {
+
+    window.loadTaskSettings =
+      loadTaskSettings;
+
+  }
+
+
+  /* -------------------------------------------------------
+     ANNOUNCEMENTS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminAnnouncements ===
+    "function"
+  ) {
+
+    window.loadAdminAnnouncements =
+      loadAdminAnnouncements;
+
+  }
+
+
+  /* -------------------------------------------------------
+     CALENDAR
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminCalendar ===
+    "function"
+  ) {
+
+    window.loadAdminCalendar =
+      loadAdminCalendar;
+
+  }
+
+
+  /* -------------------------------------------------------
+     INCOME LEVELS
+  ------------------------------------------------------- */
+
+  if (
+    typeof loadAdminIncomeLevels ===
+    "function"
+  ) {
+
+    window.loadAdminIncomeLevels =
+      loadAdminIncomeLevels;
+
+    window.loadIncomeLevelsAdmin =
+      loadAdminIncomeLevels;
+
+  }
+
+}
+
+
+/* =========================================================
+   HIDE ADMIN PAGE CONTENT
+   ========================================================= */
+
+function hideAdminPageContent() {
+
+  document
+    .querySelectorAll(
+      ".admin-page-content"
+    )
+    .forEach(section => {
+
+      section.classList.add(
+        "hidden"
+      );
+
+      section.hidden = true;
+
+    });
+
+}
+
+
+/* =========================================================
+   SHOW ADMIN SECTION
+   ========================================================= */
+
+function showAdminPageContent(sectionId) {
+
+  const section =
+    document.getElementById(
+      sectionId
+    );
+
+  if (!section) {
+
+    console.error(
+      "❌ Admin section not found:",
+      sectionId
+    );
+
+    return false;
+  }
+
+  section.classList.remove(
+    "hidden"
+  );
+
+  section.hidden = false;
+
+  return true;
+}
+
+
+/* =========================================================
+   ADMIN SECTION MAP
+   ========================================================= */
+
+const ADMIN_SECTION_MAP = {
+
+  dashboard:
+    "adminDashboardContent",
+
+  recharge:
+    "adminRechargeSection",
+
+  withdraw:
+    "adminWithdrawSection",
+
+  vip:
+    "adminVipSection",
+
+  levels:
+    "adminLevelsSection",
+
+  rechargeLevels:
+    "adminLevelsSection",
+
+  rechargeLevel:
+    "adminLevelsSection",
+
+  withdrawLevels:
+    "adminWithdrawLevelsSection",
+
+  teamLevels:
+    "adminTeamDepositLevelsSection",
+
+  teamDeposit:
+    "adminTeamDepositLevelsSection",
+
+  teamDepositLevels:
+    "adminTeamDepositLevelsSection",
+
+  gTeamDepositLevels:
+    "adminTeamDepositLevelsSection",
+
+  payments:
+    "adminPaymentsSection",
+
+  payment:
+    "adminPaymentsSection",
+
+  paymentMethods:
+    "adminPaymentsSection",
+
+  users:
+    "adminUsersSection",
+
+  rewards:
+    "adminRewardsSection",
+
+  tasks:
+    "adminTasksSection",
+
+  announcements:
+    "adminAnnouncementsSection",
+
+  calendar:
+    "adminCalendarSection",
+
+  incomeLevels:
+    "adminIncomeLevelsSection"
+
+};
+
+
+/* =========================================================
+   ADMIN PAGE TITLES
+   ========================================================= */
+
+const ADMIN_PAGE_TITLES = {
+
+  dashboard:
+    "Dashboard",
+
+  recharge:
+    "Recharge Requests",
+
+  withdraw:
+    "Withdraw Requests",
+
+  vip:
+    "VIP Levels",
+
+  levels:
+    "Recharge Levels",
+
+  rechargeLevels:
+    "Recharge Levels",
+
+  rechargeLevel:
+    "Recharge Levels",
+
+  withdrawLevels:
+    "Withdraw Levels",
+
+  teamLevels:
+    "Team Deposit Levels",
+
+  teamDeposit:
+    "Team Deposit Levels",
+
+  teamDepositLevels:
+    "Team Deposit Levels",
+
+  gTeamDepositLevels:
+    "Team Deposit Levels",
+
+  payments:
+    "Payment Methods",
+
+  payment:
+    "Payment Methods",
+
+  paymentMethods:
+    "Payment Methods",
+
+  users:
+    "Users",
+
+  rewards:
+    "Rewards",
+
+  tasks:
+    "Daily Tasks",
+
+  announcements:
+    "Announcements",
+
+  calendar:
+    "Calendar",
+
+  incomeLevels:
+    "Income Levels"
+
+};
+
+
+/* =========================================================
+   ADMIN NAVIGATE
+   STABLE VERSION
+   ========================================================= */
+
+window.adminNavigate =
+  function(section) {
+
+    console.log(
+      "➡️ ADMIN NAVIGATE:",
+      section
+    );
+
+
+    /* -----------------------------------------------------
+       ADMIN SESSION CHECK
+    ----------------------------------------------------- */
+
+    if (!currentAdmin) {
+
+      console.warn(
+        "⚠️ Admin is not signed in."
+      );
+
+      return;
+    }
+
+
+    /* -----------------------------------------------------
+       NORMALIZE
+    ----------------------------------------------------- */
+
+    const normalized =
+      String(section || "")
+        .trim();
+
+
+    const sectionId =
+      ADMIN_SECTION_MAP[
+        normalized
+      ];
+
+
+    if (!sectionId) {
+
+      console.error(
+        "❌ Unknown admin section:",
+        normalized
+      );
+
+      return;
+    }
+
+
+    /* -----------------------------------------------------
+       INCOME SECTION SAFETY
+    ----------------------------------------------------- */
+
+    if (
+      normalized ===
+      "incomeLevels"
+    ) {
+
+      ensureAdminIncomeLevelsSection();
+
+    }
+
+
+    /* -----------------------------------------------------
+       EXPOSE MODULE LOADERS
+    ----------------------------------------------------- */
+
+    exposeAdminLoaders();
+
+
+    /* -----------------------------------------------------
+       STOP OLD LISTENERS
+    ----------------------------------------------------- */
+
+    try {
+
+      stopAllListeners();
+
+    } catch (error) {
+
+      console.warn(
+        "⚠️ Listener cleanup warning:",
+        error
+      );
+
+    }
+
+
+    /* -----------------------------------------------------
+       HIDE OLD SECTIONS
+    ----------------------------------------------------- */
+
+    hideAdminPageContent();
+
+
+    /* -----------------------------------------------------
+       SHOW SELECTED SECTION
+    ----------------------------------------------------- */
+
+    const opened =
+      showAdminPageContent(
+        sectionId
+      );
+
+
+    if (!opened) {
+
+      return;
+
+    }
+
+
+    /* -----------------------------------------------------
+       PAGE TITLE
+    ----------------------------------------------------- */
+
+    const title =
+      document.getElementById(
+        "adminPageTitle"
+      );
+
+
+    if (title) {
+
+      title.textContent =
+        ADMIN_PAGE_TITLES[
+          normalized
+        ] ||
+        "CCUS Admin";
+
+    }
+
+
+    /* =====================================================
+       LOAD SELECTED SECTION
+       ===================================================== */
+
+    try {
+
+      switch (normalized) {
+
+
+        /* =================================================
+           DASHBOARD
+        ================================================= */
+
+        case "dashboard":
+
+          if (
+            typeof window.loadAdminDashboard ===
+            "function"
+          ) {
+
+            window.loadAdminDashboard();
+
+          }
+
+          break;
+
+
+        /* =================================================
+           RECHARGE
+        ================================================= */
+
+        case "recharge":
+
+          if (
+            typeof window.loadAdminRechargeRequests ===
+            "function"
+          ) {
+
+            window.loadAdminRechargeRequests();
+
+          } else {
+
+            console.error(
+              "❌ Recharge loader not found."
+            );
+
+          }
+
+          break;
+
+
+        /* =================================================
+           WITHDRAW
+        ================================================= */
+
+        case "withdraw":
+
+          if (
+            typeof window.loadAdminWithdrawRequests ===
+            "function"
+          ) {
+
+            window.loadAdminWithdrawRequests();
+
+          } else {
+
+            console.error(
+              "❌ Withdraw loader not found."
+            );
+
+          }
+
+          break;
+
+
+        /* =================================================
+           VIP
+        ================================================= */
+
+        case "vip":
+
+          if (
+            typeof window.loadAdminVipLevels ===
+            "function"
+          ) {
+
+            window.loadAdminVipLevels();
+
+          } else {
+
+            console.error(
+              "❌ VIP loader not found."
+            );
+
+          }
+
+          break;
+
+
+        /* =================================================
+           RECHARGE LEVELS
+        ================================================= */
+
+        case "levels":
+        case "rechargeLevels":
+        case "rechargeLevel":
+
+          if (
+            typeof window.loadAdminRechargeLevels ===
+            "function"
+          ) {
+
+            window.loadAdminRechargeLevels();
+
+          } else {
+
+            console.error(
+              "❌ Recharge Levels loader not found."
+            );
+
+          }
+
+          break;
+
+
+        /* =================================================
+           WITHDRAW LEVELS
+        ================================================= */
+
+        case "withdrawLevels":
+
+          if (
+            typeof window.loadAdminWithdrawLevels ===
+            "function"
+          ) {
+
+            window.loadAdminWithdrawLevels();
+
+          } else {
+
+            console.error(
+              "❌ Withdraw Levels loader not found."
+            );
+
+          }
+
+          break;
+
+
+        /* =================================================
+           TEAM DEPOSIT LEVELS
+        ================================================= */
+
+        case "teamLevels":
+        case "teamDeposit":
+        case "teamDepositLevels":
+        case "gTeamDepositLevels":
+
+          if (
+            typeof window.loadAdminTeamDepositLevels ===
+            "function"
+          ) {
+
+            window.loadAdminTeamDepositLevels();
+
+          } else {
+
+            console.error(
+              "❌ Team Deposit Levels loader not found."
+            );
+
+          }
+
+          break;
+
+
+        /* =================================================
+           PAYMENT METHODS
+        ================================================= */
+
+        case "payments":
+        case "payment":
+        case "paymentMethods":
+
+          if (
+            typeof window.loadAdminPaymentMethods ===
+            "function"
+          ) {
+
+            window.loadAdminPaymentMethods();
+
+          } else {
+
+            console.error(
+              "❌ Payment Methods loader not found."
+            );
+
+          }
+
+          break;
+
+
+        /* =================================================
+           USERS
+        ================================================= */
+
+        case "users":
+
+          if (
+            typeof window.loadAdminUsers ===
+            "function"
+          ) {
+
+            window.loadAdminUsers();
+
+          } else {
+
+            console.error(
+              "❌ Users loader not found."
+            );
+
+          }
+
+          break;
+
+
+        /* =================================================
+           REWARDS
+        ================================================= */
+
+        case "rewards":
+
+          if (
+            typeof window.loadAdminRewards ===
+            "function"
+          ) {
+
+            window.loadAdminRewards();
+
+          } else {
+
+            console.error(
+              "❌ Rewards loader not found."
+            );
+
+          }
+
+          break;
+
+
+        /* =================================================
+           TASKS
+        ================================================= */
+
+        case "tasks":
+
+          if (
+            typeof window.loadAdminTasks ===
+            "function"
+          ) {
+
+            window.loadAdminTasks();
+
+          } else {
+
+            console.error(
+              "❌ Tasks loader not found."
+            );
+
+          }
+
+
+          if (
+            typeof window.loadTaskSettings ===
+            "function"
+          ) {
+
+            window.loadTaskSettings();
+
+          }
+
+          break;
+
+
+        /* =================================================
+           ANNOUNCEMENTS
+        ================================================= */
+
+        case "announcements":
+
+          if (
+            typeof window.loadAdminAnnouncements ===
+            "function"
+          ) {
+
+            window.loadAdminAnnouncements();
+
+          } else {
+
+            console.error(
+              "❌ Announcements loader not found."
+            );
+
+          }
+
+          break;
+
+
+        /* =================================================
+           CALENDAR
+        ================================================= */
+
+        case "calendar":
+
+          if (
+            typeof window.loadAdminCalendar ===
+            "function"
+          ) {
+
+            window.loadAdminCalendar();
+
+          } else {
+
+            console.error(
+              "❌ Calendar loader not found."
+            );
+
+          }
+
+          break;
+
+
+        /* =================================================
+           INCOME LEVELS
+        ================================================= */
+
+        case "incomeLevels":
+
+          if (
+            typeof window.loadAdminIncomeLevels ===
+            "function"
+          ) {
+
+            window.loadAdminIncomeLevels();
+
+          } else {
+
+            console.error(
+              "❌ Income Levels loader not found."
+            );
+
+          }
+
+          break;
+
+
+        default:
+
+          console.warn(
+            "⚠️ No loader configured for:",
+            normalized
+          );
+
+          break;
+
+      }
+
+    } catch (error) {
+
+      console.error(
+        "❌ Admin section loader error:",
+        normalized,
+        error
+      );
+
+    }
+
+
+    /* =====================================================
+       ACTIVE BOTTOM NAV
+       ===================================================== */
+
+    document
+      .querySelectorAll(
+        ".admin-nav-item"
+      )
+      .forEach(button => {
+
+        button.classList.remove(
+          "active"
+        );
+
+      });
+
+
+    const activeButton =
+      Array.from(
+        document.querySelectorAll(
+          ".admin-nav-item"
+        )
+      )
+      .find(button => {
+
+        const onclick =
+          button.getAttribute(
+            "onclick"
+          ) || "";
+
+        return (
+          onclick.includes(
+            `'${normalized}'`
+          ) ||
+          onclick.includes(
+            `"${normalized}"`
+          )
+        );
+
+      });
+
+
+    if (activeButton) {
+
+      activeButton.classList.add(
+        "active"
+      );
+
+    }
+
+  };
+
+
+/* =========================================================
+   OPEN ADMIN SECTION
+   ========================================================= */
+
+window.openAdminSection =
+  function(section) {
+
+    return window.adminNavigate(
+      section
+    );
+
+  };
+
+
+/* =========================================================
+   INITIALIZE LOADER ALIASES
+   ========================================================= */
+
+try {
+
+  exposeAdminLoaders();
+
+} catch (error) {
+
+  console.warn(
+    "⚠️ Admin loader alias initialization warning:",
+    error
+  );
+
+}
+
+
+/* =========================================================
+   FINAL COMPATIBILITY ALIASES
+   ========================================================= */
+
+window.loadIncomeLevelsAdmin =
+  window.loadIncomeLevelsAdmin ||
+  window.loadAdminIncomeLevels;
+
+
+window.loadTeamDepositLevels =
+  window.loadTeamDepositLevels ||
+  window.loadAdminTeamDepositLevels;
+
+
+window.loadGTeamDepositLevels =
+  window.loadGTeamDepositLevels ||
+  window.loadAdminTeamDepositLevels;
+
+
+/* =========================================================
+   END ADMIN NAVIGATION
+========================================================= */
+/* =========================================================
+   DASHBOARD
+========================================================= */
+
+async function loadDashboard() {
+
   stopAllListeners();
 
-  const pages = [
-    "adminDashboardContent", "adminRechargeSection", "adminWithdrawSection",
-    "adminVipSection", "adminLevelsSection", "adminWithdrawLevelsSection",
-    "adminPaymentsSection", "adminUsersSection", "adminRewardsSection",
-    "adminTasksSection", "adminAnnouncementsSection", "adminCalendarSection",
-    "adminGTeamDepositLevelsSection"
-  ];
-  pages.forEach(id => $(id)?.classList.add("hidden"));
+  setElementText(
+    "adminTotalUsers",
+    "..."
+  );
 
-  const titles = {
-    dashboard: "Dashboard", recharge: "Recharge Requests", withdraw: "Withdraw Requests",
-    vip: "VIP Levels", levels: "Recharge Levels", withdrawLevels: "Withdraw Levels",
-    payments: "Payment Methods", users: "Users", rewards: "Rewards", tasks: "Daily Tasks",
-    announcements: "Announcements", calendar: "Calendar", gTeamLevels: "G Team Deposit Levels"
-  };
-  setElementText("adminPageTitle", titles[section] || "Dashboard");
+  setElementText(
+    "adminPendingRecharge",
+    "..."
+  );
 
-  const actionMap = {
-    dashboard: () => { $("adminDashboardContent")?.classList.remove("hidden"); loadDashboard(); },
-    recharge: () => { $("adminRechargeSection")?.classList.remove("hidden"); loadAdminRechargeRequests(); },
-    withdraw: () => { $("adminWithdrawSection")?.classList.remove("hidden"); loadAdminWithdrawRequests(); },
-    vip: () => { $("adminVipSection")?.classList.remove("hidden"); loadAdminVipLevels(); },
-    levels: () => { $("adminLevelsSection")?.classList.remove("hidden"); loadAdminRechargeLevels(); },
-    withdrawLevels: () => { $("adminWithdrawLevelsSection")?.classList.remove("hidden"); loadAdminWithdrawLevels(); },
-    payments: () => { $("adminPaymentsSection")?.classList.remove("hidden"); loadAdminPaymentMethods(); },
-    users: () => { $("adminUsersSection")?.classList.remove("hidden"); loadAdminUsers(); },
-    rewards: () => { $("adminRewardsSection")?.classList.remove("hidden"); },
-    tasks: () => { $("adminTasksSection")?.classList.remove("hidden"); loadAdminTasks(); loadTaskSettings(); },
-    announcements: () => { $("adminAnnouncementsSection")?.classList.remove("hidden"); loadAdminAnnouncements(); },
-    calendar: () => { $("adminCalendarSection")?.classList.remove("hidden"); loadAdminCalendar(); },
-    gTeamLevels: () => { $("adminGTeamDepositLevelsSection")?.classList.remove("hidden"); loadAdminGTeamDepositLevels(); }
-  };
-  if (actionMap[section]) actionMap[section]();
-};
+  setElementText(
+    "adminApprovedRecharge",
+    "..."
+  );
 
-window.openAdminSection = (section) => window.adminNavigate(section);
+  setElementText(
+    "adminPendingWithdraw",
+    "..."
+  );
 
-/* DASHBOARD */
-async function loadDashboard() {
-  await Promise.all([
-    loadUserCount(), loadRechargeStatistics(), loadWithdrawStatistics(),
-    loadRecentRecharge(), loadRecentWithdraw()
-  ]);
-}
+  setElementText(
+    "adminApprovedWithdraw",
+    "..."
+  );
 
-async function loadUserCount() {
+
+  /* USERS */
+
   try {
-    const snap = await getDocs(collection(db, "users"));
-    setElementText("adminTotalUsers", snap.size);
-  } catch { setElementText("adminTotalUsers", "0"); }
-}
 
-async function loadRechargeStatistics() {
+    const unsubscribeUsers =
+      onSnapshot(
+        collection(
+          db,
+          "users"
+        ),
+
+        snapshot => {
+
+          setElementText(
+            "adminTotalUsers",
+            snapshot.size
+          );
+        },
+
+        error => {
+
+          console.error(
+            "Dashboard users error:",
+            error
+          );
+
+          setElementText(
+            "adminTotalUsers",
+            "0"
+          );
+        }
+      );
+
+    unsubscribes.push(
+      unsubscribeUsers
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Users dashboard listener error:",
+      error
+    );
+  }
+
+
+  /* RECHARGE */
+
   try {
-    const snap = await getDocs(collection(db, "rechargeRequests"));
-    let pending = 0, approved = 0;
-    snap.docs.forEach(docSnap => {
-      const d = docSnap.data();
-      const amt = safeNumber(d.amount);
-      if (d.status === "pending") pending += amt;
-      if (["approved", "successful"].includes(String(d.status || "").toLowerCase())) approved += amt;
-    });
-    setElementText("adminPendingRecharge", money(pending));
-    setElementText("adminApprovedRecharge", money(approved));
-  } catch (err) { console.error("Recharge stats error:", err); }
-}
 
-async function loadWithdrawStatistics() {
+    const rechargeQuery =
+      query(
+        collection(
+          db,
+          "rechargeRequests"
+        ),
+        orderBy(
+          "createdAt",
+          "desc"
+        )
+      );
+
+
+    const unsubscribeRecharge =
+      onSnapshot(
+        rechargeQuery,
+
+        snapshot => {
+
+          let pending = 0;
+
+          let approved = 0;
+
+          const items =
+            snapshot.docs
+              .map(
+                docSnap => ({
+                  id:
+                    docSnap.id,
+
+                  ...(docSnap.data() || {})
+                })
+              );
+
+
+          items.forEach(
+            item => {
+
+              const status =
+                String(
+                  item.status ||
+                  ""
+                ).toLowerCase();
+
+
+              if (
+                status ===
+                "pending"
+              ) {
+                pending++;
+              }
+
+              if (
+                status ===
+                "approved"
+              ) {
+                approved++;
+              }
+            }
+          );
+
+
+          setElementText(
+            "adminPendingRecharge",
+            pending
+          );
+
+          setElementText(
+            "adminApprovedRecharge",
+            approved
+          );
+
+
+          const recentContainer =
+            getElementByIds(
+              "adminRecentRecharge",
+              "adminRecentRechargeList"
+            );
+
+
+          if (
+            recentContainer
+          ) {
+
+            const recent =
+              items.slice(
+                0,
+                5
+              );
+
+
+            recentContainer.innerHTML =
+              recent.length
+                ? recent
+                    .map(
+                      item =>
+                        rechargeCardHTML(
+                          item.id,
+                          item,
+                          true
+                        )
+                    )
+                    .join("")
+                : emptyHTML(
+                    "💳",
+                    "No Recharge Requests"
+                  );
+          }
+        },
+
+        error => {
+
+          console.error(
+            "Recharge dashboard error:",
+            error
+          );
+        }
+      );
+
+
+    unsubscribes.push(
+      unsubscribeRecharge
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Recharge dashboard listener setup error:",
+      error
+    );
+  }
+
+
+  /* WITHDRAW */
+
   try {
-    const snap = await getDocs(collection(db, "withdrawRequests"));
-    let pending = 0, approved = 0;
-    snap.docs.forEach(docSnap => {
-      const d = docSnap.data();
-      const amt = safeNumber(d.amount);
-      if (d.status === "pending") pending += amt;
-      if (["approved", "successful"].includes(String(d.status || "").toLowerCase())) approved += amt;
-    });
-    setElementText("adminPendingWithdraw", money(pending));
-    setElementText("adminApprovedWithdraw", money(approved));
-  } catch (err) { console.error("Withdraw stats error:", err); }
+
+    const withdrawQuery =
+      query(
+        collection(
+          db,
+          "withdrawRequests"
+        ),
+        orderBy(
+          "createdAt",
+          "desc"
+        )
+      );
+
+
+    const unsubscribeWithdraw =
+      onSnapshot(
+        withdrawQuery,
+
+        snapshot => {
+
+          let pending = 0;
+
+          let approved = 0;
+
+
+          const items =
+            snapshot.docs
+              .map(
+                docSnap => ({
+                  id:
+                    docSnap.id,
+
+                  ...(docSnap.data() || {})
+                })
+              );
+
+
+          items.forEach(
+            item => {
+
+              const status =
+                String(
+                  item.status ||
+                  ""
+                ).toLowerCase();
+
+
+              if (
+                status ===
+                "pending"
+              ) {
+                pending++;
+              }
+
+              if (
+                status ===
+                "approved"
+              ) {
+                approved++;
+              }
+            }
+          );
+
+
+          setElementText(
+            "adminPendingWithdraw",
+            pending
+          );
+
+          setElementText(
+            "adminApprovedWithdraw",
+            approved
+          );
+
+
+          const recentContainer =
+            getElementByIds(
+              "adminRecentWithdraw",
+              "adminRecentWithdrawList"
+            );
+
+
+          if (
+            recentContainer
+          ) {
+
+            const recent =
+              items.slice(
+                0,
+                5
+              );
+
+
+            recentContainer.innerHTML =
+              recent.length
+                ? recent
+                    .map(
+                      item =>
+                        withdrawCardHTML(
+                          item.id,
+                          item,
+                          true
+                        )
+                    )
+                    .join("")
+                : emptyHTML(
+                    "💸",
+                    "No Withdraw Requests"
+                  );
+          }
+        },
+
+        error => {
+
+          console.error(
+            "Withdraw dashboard error:",
+            error
+          );
+        }
+      );
+
+
+    unsubscribes.push(
+      unsubscribeWithdraw
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Withdraw dashboard listener setup error:",
+      error
+    );
+  }
 }
 
-/* RECENT ACTIVITY */
-async function loadRecentRecharge() {
-  const container = $("adminRecentRecharge");
-  if (!container) return;
+
+/* =========================================================
+   CCUS ADMIN - RECHARGE REQUESTS
+   STABLE / CORRECTED VERSION
+========================================================= */
+
+
+/* =========================================================
+   LOAD RECHARGE REQUESTS
+   - No Firestore orderBy dependency
+   - Client-side sorting
+   - Handles missing createdAt safely
+========================================================= */
+
+async function loadAdminRechargeRequests() {
+
+  const container = getElementByIds(
+    "rechargeRequestsList",
+    "adminRechargeList"
+  );
+
+  if (!container) {
+    console.error(
+      "❌ Recharge request list not found."
+    );
+    return;
+  }
+
+  container.innerHTML = loadingHTML(
+    "💳",
+    "Loading Recharge Requests..."
+  );
+
   try {
-    const snap = await getDocs(collection(db, "rechargeRequests"));
-    if (snap.empty) return container.innerHTML = emptyHTML("💰", "No Recharge Requests", "No recharge requests yet.");
-    const docs = snap.docs.map(d => ({ id: d.id, data: d.data() })).sort((a, b) => getMillis(b.data.createdAt) - getMillis(a.data.createdAt));
-    container.innerHTML = docs.slice(0, 5).map(item => rechargeCardHTML(item.id, item.data, true)).join("");
-  } catch { container.innerHTML = errorHTML("Failed to load recharge requests."); }
+
+    const rechargeRef = collection(
+      db,
+      "rechargeRequests"
+    );
+
+    const unsubscribe = onSnapshot(
+      rechargeRef,
+
+      snapshot => {
+
+        try {
+
+          const items = snapshot.docs
+            .map(docSnap => ({
+              id: docSnap.id,
+              ...(docSnap.data() || {})
+            }))
+            .sort(
+              (a, b) =>
+                getMillis(b.createdAt) -
+                getMillis(a.createdAt)
+            );
+
+          if (!items.length) {
+
+            container.innerHTML = emptyHTML(
+              "💳",
+              "No Recharge Requests",
+              "No recharge request found."
+            );
+
+            return;
+          }
+
+          container.innerHTML = items
+            .map(item =>
+              rechargeCardHTML(
+                item.id,
+                item
+              )
+            )
+            .join("");
+
+        } catch (renderError) {
+
+          console.error(
+            "❌ Recharge render error:",
+            renderError
+          );
+
+          container.innerHTML = errorHTML(
+            renderError?.message ||
+            "Failed to display recharge requests."
+          );
+        }
+      },
+
+      error => {
+
+        console.error(
+          "❌ Load recharge requests error:",
+          error
+        );
+
+        container.innerHTML = errorHTML(
+          error?.message ||
+          "Failed to load recharge requests."
+        );
+      }
+    );
+
+    unsubscribes.push(
+      unsubscribe
+    );
+
+  } catch (error) {
+
+    console.error(
+      "❌ Recharge listener initialization error:",
+      error
+    );
+
+    container.innerHTML = errorHTML(
+      error?.message ||
+      "Failed to initialize recharge requests."
+    );
+  }
 }
 
-async function loadRecentWithdraw() {
-  const container = $("adminRecentWithdraw");
-  if (!container) return;
-  try {
-    const snap = await getDocs(collection(db, "withdrawRequests"));
-    if (snap.empty) return container.innerHTML = emptyHTML("💸", "No Withdraw Requests", "No withdrawal requests yet.");
-    const docs = snap.docs.map(d => ({ id: d.id, data: d.data() })).sort((a, b) => getMillis(b.data.createdAt) - getMillis(a.data.createdAt));
-    container.innerHTML = docs.slice(0, 5).map(item => withdrawCardHTML(item.id, item.data, true)).join("");
-  } catch { container.innerHTML = errorHTML("Failed to load withdrawal requests."); }
-}
 
-/* RECHARGE REQUESTS */
-function loadAdminRechargeRequests() {
-  const container = $("rechargeRequestsList");
-  if (!container) return;
-  container.innerHTML = loadingHTML("💰", "Loading Recharge Requests...");
-
-  const unsub = onSnapshot(query(collection(db, "rechargeRequests")), snap => {
-    if (snap.empty) return container.innerHTML = emptyHTML("💰", "No Recharge Requests", "Recharge requests will appear here.");
-    const docs = snap.docs.map(d => ({ id: d.id, data: d.data() })).sort((a, b) => getMillis(b.data.createdAt) - getMillis(a.data.createdAt));
-    container.innerHTML = docs.map(item => rechargeCardHTML(item.id, item.data, false)).join("");
-  }, () => { container.innerHTML = errorHTML("Failed to load recharge requests."); });
-  unsubscribes.push(unsub);
-}
-
-function rechargeCardHTML(id, data, compact = false) {
-  const status = String(data.status || "pending").toLowerCase();
-  const statusClass = ["approved", "successful"].includes(status) ? "success" : status === "rejected" ? "error" : "pending";
-  const actionButtons = status === "pending" && !compact ? `
-    <div class="admin-action-row">
-      <button type="button" class="admin-primary-btn" onclick="window.approveRecharge('${escapeHTML(id)}')">✓ Approve</button>
-      <button type="button" class="admin-danger-btn" onclick="window.rejectRecharge('${escapeHTML(id)}')">✕ Reject</button>
-    </div>` : "";
-
-  return `
-    <div class="admin-request-card">
-      <div class="admin-request-header">
-        <div>
-          <strong>${escapeHTML(data.userName || data.fullName || "Unknown User")}</strong>
-          <small>${escapeHTML(data.userEmail || data.email || "")}</small>
-        </div>
-        <span class="admin-status ${statusClass}">${escapeHTML(status)}</span>
-      </div>
-      <div class="admin-request-body">
-        <div><span>Amount</span><strong>${money(data.amount)}</strong></div>
-        <div><span>Level</span><strong>${escapeHTML(data.levelName || data.depositLevel || "Custom")}</strong></div>
-        <div><span>Commission</span><strong>${money(data.commissionAmount)}</strong></div>
-        <div><span>Payment Method</span><strong>${escapeHTML(data.paymentMethod || "—")}</strong></div>
-        <div><span>Transaction ID</span><strong>${escapeHTML(data.transactionId || data.referenceNumber || "—")}</strong></div>
-        <div><span>Created</span><strong>${escapeHTML(formatDate(data.createdAt))}</strong></div>
-      </div>
-      ${actionButtons}
-    </div>`;
-}
+/* =========================================================
+   FIND RECHARGE LEVEL
+========================================================= */
 
 async function findRechargeLevel(amount) {
-  const snap = await getDocs(collection(db, "rechargeLevels"));
-  const levels = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => safeNumber(a.order) - safeNumber(b.order));
-  return levels.find(l => l.active !== false && safeNumber(l.amount) === safeNumber(amount)) || null;
+
+  const numericAmount =
+    safeNumber(amount);
+
+  if (numericAmount <= 0) {
+    return null;
+  }
+
+  try {
+
+    const snapshot = await getDocs(
+      collection(
+        db,
+        "rechargeLevels"
+      )
+    );
+
+    const levels = snapshot.docs
+      .map(docSnap => ({
+        id: docSnap.id,
+        ...(docSnap.data() || {})
+      }))
+      .filter(level =>
+        level.active !== false &&
+        safeNumber(level.amount) > 0
+      )
+      .sort(
+        (a, b) =>
+          safeNumber(a.amount) -
+          safeNumber(b.amount)
+      );
+
+    if (!levels.length) {
+      return null;
+    }
+
+    /* Exact level */
+
+    const exact = levels.find(
+      level =>
+        safeNumber(level.amount) ===
+        numericAmount
+    );
+
+    if (exact) {
+      return exact;
+    }
+
+    /* Highest level <= recharge amount */
+
+    const eligible = levels.filter(
+      level =>
+        safeNumber(level.amount) <=
+        numericAmount
+    );
+
+    if (eligible.length) {
+      return eligible[
+        eligible.length - 1
+      ];
+    }
+
+    /*
+       If recharge amount is below
+       the first configured level,
+       return null rather than incorrectly
+       assigning the first level.
+    */
+
+    return null;
+
+  } catch (error) {
+
+    console.error(
+      "❌ Find recharge level error:",
+      error
+    );
+
+    throw error;
+  }
 }
 
-async function findReferrer(userData, rechargeData) {
-  const refCode = (userData.referredBy || userData.referrerCode || rechargeData.referredBy || "").trim();
-  if (!refCode) return null;
+
+/* =========================================================
+   FIND REFERRER
+========================================================= */
+
+async function findReferrer(userData) {
+
+  if (!userData) {
+    return null;
+  }
+
+  const referralCode =
+    String(
+      userData.referredBy ||
+      userData.referrerCode ||
+      ""
+    ).trim();
+
+  if (!referralCode) {
+    return null;
+  }
+
   try {
-    const q = query(collection(db, "users"), where("referralCode", "==", refCode), limit(1));
-    const snap = await getDocs(q);
-    if (!snap.empty) return { id: snap.docs[0].id, data: snap.docs[0].data() };
-    const userSnap = await getDoc(doc(db, "users", refCode));
-    if (userSnap.exists()) return { id: userSnap.id, data: userSnap.data() };
-  } catch (err) { console.warn("Find referrer error:", err); }
+
+    const usersRef =
+      collection(
+        db,
+        "users"
+      );
+
+    /*
+       First:
+       Search referralCode
+    */
+
+    const byReferral =
+      await getDocs(
+        query(
+          usersRef,
+          where(
+            "referralCode",
+            "==",
+            referralCode
+          ),
+          limit(1)
+        )
+      );
+
+    if (!byReferral.empty) {
+
+      const snap =
+        byReferral.docs[0];
+
+      return {
+        id: snap.id,
+        data: snap.data() || {}
+      };
+    }
+
+    /*
+       Second:
+       Search accountNumber
+    */
+
+    const byAccount =
+      await getDocs(
+        query(
+          usersRef,
+          where(
+            "accountNumber",
+            "==",
+            referralCode
+          ),
+          limit(1)
+        )
+      );
+
+    if (!byAccount.empty) {
+
+      const snap =
+        byAccount.docs[0];
+
+      return {
+        id: snap.id,
+        data: snap.data() || {}
+      };
+    }
+
+  } catch (error) {
+
+    console.warn(
+      "⚠️ Find referrer error:",
+      error
+    );
+  }
+
   return null;
 }
 
-/* TRANSACTION SAFE RECHARGE APPROVAL */
+
+/* =========================================================
+   RECHARGE CARD
+========================================================= */
+
+function rechargeCardHTML(
+  id,
+  data,
+  compact = false
+) {
+
+  const status =
+    String(
+      data?.status ||
+      "pending"
+    )
+      .trim()
+      .toLowerCase();
+
+  const amount =
+    safeNumber(
+      data?.upgradeAmount ??
+      data?.depositAmount ??
+      data?.amount
+    );
+
+  const level =
+    data?.levelName ||
+    data?.rechargeLevelName ||
+    data?.level ||
+    "—";
+
+  const commission =
+    safeNumber(
+      data?.commission
+    );
+
+  const payment =
+    data?.paymentMethod ||
+    data?.method ||
+    "—";
+
+  const transaction =
+    data?.transactionId ||
+    data?.reference ||
+    "—";
+
+  const created =
+    formatDate(
+      data?.createdAt
+    );
+
+  const userId =
+    data?.userId ||
+    data?.uid ||
+    "—";
+
+  const statusClass =
+    escapeHTML(
+      status.replace(
+        /[^a-zA-Z0-9_-]/g,
+        ""
+      )
+    );
+
+  return `
+
+    <div class="admin-request-card">
+
+      <!-- HEADER -->
+
+      <div class="admin-card-header">
+
+        <div>
+
+          <h3>
+            💳 Recharge
+          </h3>
+
+          <small>
+            Request:
+            ${escapeHTML(String(id))}
+          </small>
+
+        </div>
+
+        <span
+          class="status-${statusClass}"
+        >
+          ${escapeHTML(
+            status.toUpperCase()
+          )}
+        </span>
+
+      </div>
+
+
+      <!-- DETAILS -->
+
+      <div class="admin-card-grid">
+
+        <div>
+          <small>Amount</small>
+
+          <strong>
+            ETB ${formatAdminMoney(amount)}
+          </strong>
+        </div>
+
+
+        <div>
+          <small>Level</small>
+
+          <strong>
+            ${escapeHTML(
+              String(level)
+            )}
+          </strong>
+        </div>
+
+
+        <div>
+          <small>Commission</small>
+
+          <strong>
+            ETB ${formatAdminMoney(
+              commission
+            )}
+          </strong>
+        </div>
+
+
+        <div>
+          <small>Payment</small>
+
+          <strong>
+            ${escapeHTML(
+              String(payment)
+            )}
+          </strong>
+        </div>
+
+
+        <div>
+          <small>Transaction</small>
+
+          <strong>
+            ${escapeHTML(
+              String(transaction)
+            )}
+          </strong>
+        </div>
+
+
+        <div>
+          <small>Date</small>
+
+          <strong>
+            ${escapeHTML(
+              String(created)
+            )}
+          </strong>
+        </div>
+
+
+        <div>
+          <small>User ID</small>
+
+          <strong>
+            ${escapeHTML(
+              String(userId)
+            )}
+          </strong>
+        </div>
+
+      </div>
+
+
+      <!-- ACTIONS -->
+
+      ${
+        !compact &&
+        status === "pending"
+          ? `
+
+            <div class="admin-action-row">
+
+              <button
+                type="button"
+                class="admin-primary-btn"
+                onclick="window.approveRecharge('${escapeHTML(
+                  String(id)
+                )}')"
+              >
+                ✅ Approve
+              </button>
+
+
+              <button
+                type="button"
+                class="admin-danger-btn"
+                onclick="window.rejectRecharge('${escapeHTML(
+                  String(id)
+                )}')"
+              >
+                ❌ Reject
+              </button>
+
+            </div>
+
+          `
+          : ""
+      }
+
+    </div>
+
+  `;
+}
+
+
+/* =========================================================
+   APPROVE RECHARGE / UPGRADE
+   ---------------------------------------------------------
+   BUSINESS RULES
+   ---------------------------------------------------------
+   1. Recharge approval:
+      - totalRecharge INCREASES
+      - totalBalance MUST NOT increase
+
+   2. NORMAL DEPOSIT:
+      Example:
+        Old Total Recharge = 0
+        Payment            = 1600
+        New Total Recharge = 1600
+
+   3. UPGRADE:
+      Example:
+        Old Total Recharge = 6000
+        Payment            = 4000
+        Target Level       = 10000
+        New Total Recharge = 10000
+
+      IMPORTANT:
+      Payment amount is NOT necessarily the level amount.
+
+   4. Recharge levels:
+      1600  -> Task Limit 2
+      6000  -> Task Limit 8
+      10000 -> Task Limit 13
+      21000 -> Task Limit 26
+      45000 -> Task Limit 56
+      90000 -> Task Limit 118
+
+   5. Highest eligible ACTIVE level is selected.
+
+   6. Referral commission:
+      - Credited only once
+      - teamCommissions/{requestId}
+
+   7. Recharge request:
+      - Can only be approved once
+
+   8. active accepts:
+      - true
+      - 1
+      - "true"
+
+   9. Firestore transaction:
+      - ALL transaction reads happen BEFORE writes
+========================================================= */
+
 window.approveRecharge = async function (requestId) {
-  if (!currentAdmin) return alert("Admin session not found.");
-  if (!confirm("Approve this recharge?")) return;
 
-  try {
-    const rechargeRef = doc(db, "rechargeRequests", requestId);
-    const rechargeSnap = await getDoc(rechargeRef);
-    if (!rechargeSnap.exists()) return alert("Recharge request not found.");
-    
-    const rechargeData = rechargeSnap.data();
-    if (rechargeData.status !== "pending") return alert("This recharge has already been processed.");
+  /* =======================================================
+     0. ADMIN CHECK
+  ======================================================= */
 
-    const userId = rechargeData.userId;
-    if (!userId) return alert("Recharge request has no user ID.");
-
-    const userRef = doc(db, "users", userId);
-    const userSnap = await getDoc(userRef);
-    if (!userSnap.exists()) return alert("User account not found.");
-
-    const amount = safeNumber(rechargeData.amount);
-    if (amount <= 0) return alert("Invalid recharge amount.");
-
-    const matchedLevel = await findRechargeLevel(amount);
-    const levelId = matchedLevel?.id || null;
-    const levelName = matchedLevel?.name || "Custom";
-    const commissionAmount = Math.max(0, safeNumber(matchedLevel?.commission));
-    const taskLimit = Math.max(1, Math.floor(safeNumber(matchedLevel?.taskLimit || 1)));
-
-    const referrer = await findReferrer(userSnap.data(), rechargeData);
-    const referrerId = referrer?.id === userId ? null : referrer?.id || null;
-    const commissionRef = doc(db, "teamCommissions", requestId);
-
-    await runTransaction(db, async (transaction) => {
-      // 1. ALL READS FIRST
-      const freshRechargeSnap = await transaction.get(rechargeRef);
-      if (!freshRechargeSnap.exists() || freshRechargeSnap.data().status !== "pending") {
-        throw new Error("Recharge invalid or already processed.");
-      }
-      const freshUserSnap = await transaction.get(userRef);
-      if (!freshUserSnap.exists()) throw new Error("User account not found.");
-      
-      const commissionSnap = await transaction.get(commissionRef);
-
-      let referrerRef = null;
-      let referrerSnap = null;
-      if (commissionAmount > 0 && referrerId && !commissionSnap.exists()) {
-        referrerRef = doc(db, "users", referrerId);
-        referrerSnap = await transaction.get(referrerRef);
-      }
-
-      // 2. ALL WRITES AFTER READS
-      transaction.update(userRef, {
-        totalRecharge: safeNumber(freshUserSnap.data().totalRecharge) + amount,
-        updatedAt: serverTimestamp()
-      });
-
-      let commissionStatus = "none";
-      if (commissionAmount > 0 && referrerId && !commissionSnap.exists() && referrerSnap?.exists()) {
-        transaction.update(referrerRef, {
-          totalBalance: safeNumber(referrerSnap.data().totalBalance) + commissionAmount,
-          updatedAt: serverTimestamp()
-        });
-
-        transaction.set(commissionRef, {
-          referrerId,
-          referredUserId: userId,
-          referredUserName: freshUserSnap.data().fullName || freshUserSnap.data().name || "User",
-          depositAmount: amount,
-          depositLevel: levelName,
-          commissionAmount,
-          status: "approved",
-          createdAt: serverTimestamp()
-        });
-        commissionStatus = "credited";
-      }
-
-      transaction.update(rechargeRef, {
-        status: "approved",
-        depositLevelId: levelId,
-        depositLevel: levelName,
-        levelName,
-        commissionAmount,
-        commissionReceiverId: referrerId,
-        commissionStatus,
-        taskLimit,
-        approvedAt: serverTimestamp(),
-        approvedBy: currentAdmin.uid,
-        updatedAt: serverTimestamp()
-      });
-    });
-
-    alert(`Recharge approved successfully!\n${money(amount)} added to Total Recharge.`);
-    await loadDashboard();
-  } catch (err) {
-    alert(err.message || "Failed to approve recharge.");
+  if (!currentAdmin) {
+    alert("Admin session not found.");
+    return;
   }
-};
 
-window.rejectRecharge = async function (requestId) {
-  if (!currentAdmin) return;
-  const reason = prompt("Enter rejection reason:", "Recharge rejected by admin");
-  if (reason === null) return;
-
-  try {
-    await runTransaction(db, async (transaction) => {
-      const ref = doc(db, "rechargeRequests", requestId);
-      const snap = await transaction.get(ref);
-      if (!snap.exists() || snap.data().status !== "pending") throw new Error("Request invalid or already processed.");
-      transaction.update(ref, {
-        status: "rejected",
-        rejectionReason: reason.trim(),
-        rejectedAt: serverTimestamp(),
-        rejectedBy: currentAdmin.uid,
-        updatedAt: serverTimestamp()
-      });
-    });
-    alert("Recharge rejected.");
-    await loadDashboard();
-  } catch (err) { alert(err.message || "Failed to reject recharge."); }
-};
-
-/* WITHDRAW REQUESTS */
-function loadAdminWithdrawRequests() {
-  const container = $("withdrawRequestsList");
-  if (!container) return;
-  container.innerHTML = loadingHTML("💸", "Loading Withdrawal Requests...");
-
-  const filter = $("withdrawStatusFilter")?.value || "all";
-  let q = collection(db, "withdrawRequests");
-  if (filter !== "all") q = query(collection(db, "withdrawRequests"), where("status", "==", filter));
-
-  const unsub = onSnapshot(q, snap => {
-    if (snap.empty) return container.innerHTML = emptyHTML("💸", "No Withdrawal Requests", "No requests found.");
-    const docs = snap.docs.map(d => ({ id: d.id, data: d.data() })).sort((a, b) => getMillis(b.data.createdAt) - getMillis(a.data.createdAt));
-    container.innerHTML = docs.map(item => withdrawCardHTML(item.id, item.data, false)).join("");
-  }, () => { container.innerHTML = errorHTML("Failed to load withdrawal requests."); });
-  unsubscribes.push(unsub);
-}
-
-function withdrawCardHTML(id, data, compact = false) {
-  const status = String(data.status || "pending").toLowerCase();
-  const statusClass = ["approved", "successful"].includes(status) ? "success" : status === "rejected" ? "error" : "pending";
-  const actionButtons = status === "pending" && !compact ? `
-    <div class="admin-action-row">
-      <button type="button" class="admin-primary-btn" onclick="window.approveWithdraw('${escapeHTML(id)}')">✓ Approve</button>
-      <button type="button" class="admin-danger-btn" onclick="window.rejectWithdraw('${escapeHTML(id)}')">✕ Reject</button>
-    </div>` : "";
-
-  return `
-    <div class="admin-request-card">
-      <div class="admin-request-header">
-        <div>
-          <strong>${escapeHTML(data.userName || data.fullName || "Unknown User")}</strong>
-          <small>${escapeHTML(data.userEmail || "")}</small>
-        </div>
-        <span class="admin-status ${statusClass}">${escapeHTML(status)}</span>
-      </div>
-      <div class="admin-request-body">
-        <div><span>Amount</span><strong>${money(data.amount)}</strong></div>
-        <div><span>Payment Method</span><strong>${escapeHTML(data.paymentMethod || "—")}</strong></div>
-        <div><span>Account Name</span><strong>${escapeHTML(data.accountName || "—")}</strong></div>
-        <div><span>Account Number</span><strong>${escapeHTML(data.accountNumber || "—")}</strong></div>
-        <div><span>Created</span><strong>${escapeHTML(formatDate(data.createdAt))}</strong></div>
-      </div>
-      ${actionButtons}
-    </div>`;
-}
-
-window.approveWithdraw = async function (requestId) {
-  if (!currentAdmin || !confirm("Approve this withdrawal?")) return;
-  try {
-    await runTransaction(db, async (transaction) => {
-      const ref = doc(db, "withdrawRequests", requestId);
-      const snap = await transaction.get(ref);
-      if (!snap.exists() || snap.data().status !== "pending") throw new Error("Request processed.");
-      transaction.update(ref, {
-        status: "approved",
-        approvedAt: serverTimestamp(),
-        approvedBy: currentAdmin.uid,
-        updatedAt: serverTimestamp()
-      });
-    });
-    alert("Withdrawal approved successfully.");
-    await loadDashboard();
-  } catch (err) { alert(err.message); }
-};
-
-window.rejectWithdraw = async function (requestId) {
-  if (!currentAdmin) return;
-  const reason = prompt("Enter rejection reason:", "Withdrawal rejected by admin");
-  if (reason === null) return;
+  if (!requestId) {
+    alert("Recharge request ID is missing.");
+    return;
+  }
 
   try {
-    await runTransaction(db, async (transaction) => {
-      const reqRef = doc(db, "withdrawRequests", requestId);
-      const snap = await transaction.get(reqRef);
-      if (!snap.exists() || snap.data().status !== "pending") throw new Error("Request processed.");
-      
-      const data = snap.data();
-      const shouldRefund = data.balanceDeducted === true;
 
-      if (shouldRefund && data.userId) {
-        const userRef = doc(db, "users", data.userId);
-        const userSnap = await transaction.get(userRef);
-        if (userSnap.exists()) {
-          transaction.update(userRef, {
-            totalBalance: safeNumber(userSnap.data().totalBalance) + safeNumber(data.amount),
-            updatedAt: serverTimestamp()
-          });
+    /* =====================================================
+       1. REQUEST REFERENCE
+    ===================================================== */
+
+    const requestRef = doc(
+      db,
+      "rechargeRequests",
+      requestId
+    );
+
+
+    /* =====================================================
+       2. INITIAL REQUEST READ
+    ===================================================== */
+
+    const requestSnap = await getDoc(
+      requestRef
+    );
+
+    if (!requestSnap.exists()) {
+
+      alert(
+        "Recharge request not found."
+      );
+
+      return;
+    }
+
+
+    const requestData =
+      requestSnap.data() || {};
+
+
+    /* =====================================================
+       3. CHECK REQUEST STATUS
+    ===================================================== */
+
+    const currentStatus =
+      String(
+        requestData.status || "pending"
+      )
+        .trim()
+        .toLowerCase();
+
+
+    if (currentStatus !== "pending") {
+
+      alert(
+        "This recharge request has already been processed."
+      );
+
+      return;
+    }
+
+
+    /* =====================================================
+       4. GET PAYMENT / UPGRADE AMOUNT
+       -----------------------------------------------------
+       For upgrade:
+
+       Old Total = 6000
+       Payment   = 4000
+
+       Therefore:
+
+       New Total = 6000 + 4000
+                 = 10000
+    ===================================================== */
+
+    const paymentAmount =
+      safeNumber(
+        requestData.upgradeAmount ??
+        requestData.depositAmount ??
+        requestData.amount
+      );
+
+
+    if (paymentAmount <= 0) {
+
+      alert(
+        "Invalid recharge / upgrade amount."
+      );
+
+      return;
+    }
+
+
+    /* =====================================================
+       5. GET USER ID
+    ===================================================== */
+
+    const userId =
+      requestData.userId ||
+      requestData.uid;
+
+
+    if (!userId) {
+
+      alert(
+        "User ID is missing."
+      );
+
+      return;
+    }
+
+
+    /* =====================================================
+       6. USER REFERENCE
+    ===================================================== */
+
+    const userRef = doc(
+      db,
+      "users",
+      userId
+    );
+
+
+    /* =====================================================
+       7. LOAD ALL RECHARGE LEVELS
+    ===================================================== */
+
+    const levelsSnap =
+      await getDocs(
+        collection(
+          db,
+          "rechargeLevels"
+        )
+      );
+
+
+    const activeLevels = [];
+
+
+    levelsSnap.forEach(
+      levelDoc => {
+
+        const data =
+          levelDoc.data() || {};
+
+
+        const isActive =
+          data.active === true ||
+          data.active === 1 ||
+          data.active === "true";
+
+
+        if (!isActive) {
+          return;
         }
+
+
+        const levelAmount =
+          safeNumber(
+            data.amount
+          );
+
+
+        if (levelAmount <= 0) {
+          return;
+        }
+
+
+        const taskLimit =
+          Math.max(
+            0,
+            Math.floor(
+              safeNumber(
+                data.taskLimit
+              )
+            )
+          );
+
+
+        activeLevels.push({
+
+          id:
+            levelDoc.id,
+
+          name:
+            data.name ||
+            levelDoc.id,
+
+          amount:
+            levelAmount,
+
+          taskLimit:
+            taskLimit,
+
+          order:
+            safeNumber(
+              data.order
+            ),
+
+          commission:
+            safeNumber(
+              data.commission
+            )
+
+        });
+
+      }
+    );
+
+
+    /* =====================================================
+       8. SORT LEVELS
+       -----------------------------------------------------
+       LOW → HIGH
+    ===================================================== */
+
+    activeLevels.sort(
+      (a, b) =>
+        a.amount - b.amount
+    );
+
+
+    if (
+      activeLevels.length === 0
+    ) {
+
+      alert(
+        "No active recharge levels found."
+      );
+
+      return;
+    }
+
+
+    /* =====================================================
+       9. FIND REFERRER HINT
+       -----------------------------------------------------
+       This is done BEFORE the transaction.
+
+       The actual referrer document will still be read
+       INSIDE the transaction before any write.
+    ===================================================== */
+
+    let referrerHint = null;
+
+
+    try {
+
+      const initialUserSnap =
+        await getDoc(
+          userRef
+        );
+
+
+      if (
+        initialUserSnap.exists()
+      ) {
+
+        const initialUserData =
+          initialUserSnap.data() || {};
+
+
+        if (
+          typeof findReferrer ===
+          "function"
+        ) {
+
+          referrerHint =
+            await findReferrer(
+              initialUserData
+            );
+
+        }
+
       }
 
-      transaction.update(reqRef, {
-        status: "rejected",
-        rejectionReason: reason.trim(),
-        balanceRefunded: shouldRefund,
-        rejectedAt: serverTimestamp(),
-        rejectedBy: currentAdmin.uid,
-        updatedAt: serverTimestamp()
-      });
-    });
-    alert("Withdrawal rejected.");
-    await loadDashboard();
-  } catch (err) { alert(err.message); }
-};
+    } catch (referrerError) {
 
-/* VIP LEVELS */
-function loadAdminVipLevels() {
-  const container = $("adminVipLevelsList");
-  if (!container) return;
-  container.innerHTML = loadingHTML("👑", "Loading VIP Levels...");
+      console.warn(
+        "⚠️ Could not resolve referrer before transaction:",
+        referrerError
+      );
 
-  const unsub = onSnapshot(query(collection(db, "vip_levels"), orderBy("level", "asc")), snap => {
-    if (snap.empty) return container.innerHTML = emptyHTML("👑", "No VIP Levels", "Add your first VIP level.");
-    container.innerHTML = snap.docs.map(docSnap => vipCardHTML(docSnap.id, docSnap.data())).join("");
-  }, () => { container.innerHTML = errorHTML("Failed to load VIP levels."); });
-  unsubscribes.push(unsub);
-}
-
-function vipCardHTML(id, data) {
-  const level = Math.floor(safeNumber(data.level));
-  const active = data.active !== false;
-  return `
-    <div class="admin-level-card" data-vip-id="${escapeHTML(id)}">
-      <div><strong>👑 ${escapeHTML(data.name || `VIP ${level}`)}</strong><small>Level ${level}</small></div>
-      <div class="admin-level-details">
-        <span>Price: <strong>${money(data.price)}</strong></span>
-        <span>Profit: <strong>${money(data.profit)}</strong></span>
-        <span>Valid: <strong>${safeNumber(data.validDays)} days</strong></span>
-        <span>Status: <strong>${active ? "Active" : "Disabled"}</strong></span>
-      </div>
-      <div class="admin-action-row">
-        <button type="button" class="admin-secondary-btn" onclick="window.editVipLevel('${escapeHTML(id)}')">Edit</button>
-        <button type="button" class="admin-secondary-btn" onclick="window.toggleVipLevel('${escapeHTML(id)}', ${active})">${active ? "Disable" : "Enable"}</button>
-        <button type="button" class="admin-danger-btn" onclick="window.deleteVipLevel('${escapeHTML(id)}')">Delete</button>
-      </div>
-    </div>`;
-}
-
-window.addVipLevel = async function () {
-  const level = Math.floor(safeNumber($("newVipLevel")?.value));
-  const name = $("newVipName")?.value.trim() || "";
-  const price = safeNumber($("newVipPrice")?.value);
-  const profit = safeNumber($("newVipProfit")?.value);
-  const validDays = Math.floor(safeNumber($("newVipValidDays")?.value));
-
-  if (level < 1 || !name || price <= 0 || profit < 0 || validDays < 1) {
-    return showMessage("adminVipMessage", "Please enter valid VIP information.", "error");
-  }
-
-  try {
-    const q = query(collection(db, "vip_levels"), where("level", "==", level), limit(1));
-    const existing = await getDocs(q);
-    const data = { level, name, price, profit, validDays, active: true, order: level, updatedAt: serverTimestamp() };
-
-    if (!existing.empty) {
-      await updateDoc(existing.docs[0].ref, data);
-    } else {
-      await addDoc(collection(db, "vip_levels"), { ...data, createdAt: serverTimestamp() });
-    }
-    clearInputs(["newVipLevel", "newVipName", "newVipPrice", "newVipProfit", "newVipValidDays"]);
-    showMessage("adminVipMessage", `VIP ${level} saved successfully.`, "success");
-  } catch (err) { showMessage("adminVipMessage", err.message, "error"); }
-};
-
-window.editVipLevel = async function (id) {
-  try {
-    const snap = await getDoc(doc(db, "vip_levels", id));
-    if (!snap.exists()) return alert("VIP level not found.");
-    const data = snap.data();
-
-    const level = prompt("VIP Level:", safeNumber(data.level)); if (level === null) return;
-    const name = prompt("VIP Name:", data.name || ""); if (name === null) return;
-    const price = prompt("Price:", safeNumber(data.price)); if (price === null) return;
-    const profit = prompt("Profit:", safeNumber(data.profit)); if (profit === null) return;
-    const validDays = prompt("Valid Days:", safeNumber(data.validDays)); if (validDays === null) return;
-
-    await updateDoc(doc(db, "vip_levels", id), {
-      level: Math.floor(safeNumber(level)), name: name.trim(),
-      price: safeNumber(price), profit: safeNumber(profit),
-      validDays: Math.floor(safeNumber(validDays)), updatedAt: serverTimestamp()
-    });
-    alert("VIP level updated successfully.");
-  } catch (err) { alert(err.message); }
-};
-
-window.toggleVipLevel = async (id, active) => {
-  try { await updateDoc(doc(db, "vip_levels", id), { active: !active, updatedAt: serverTimestamp() }); } 
-  catch (err) { alert(err.message); }
-};
-
-window.deleteVipLevel = async (id) => {
-  if (!confirm("Delete VIP Level?")) return;
-  try { await deleteDoc(doc(db, "vip_levels", id)); } 
-  catch (err) { alert(err.message); }
-};
-
-/* RECHARGE LEVELS */
-function loadAdminRechargeLevels() {
-  const container = $("adminRechargeLevelsList");
-  if (!container) return;
-  container.innerHTML = loadingHTML("⚙️", "Loading Recharge Levels...");
-
-  const unsub = onSnapshot(query(collection(db, "rechargeLevels"), orderBy("order", "asc")), snap => {
-    if (snap.empty) return container.innerHTML = emptyHTML("⚙️", "No Recharge Levels", "Add recharge levels below.");
-    container.innerHTML = snap.docs.map(docSnap => rechargeLevelHTML(docSnap.id, docSnap.data())).join("");
-  }, () => { container.innerHTML = errorHTML("Failed to load recharge levels."); });
-  unsubscribes.push(unsub);
-}
-
-function rechargeLevelHTML(id, data) {
-  const active = data.active !== false;
-  return `
-    <div class="admin-level-card">
-      <div><strong>${escapeHTML(data.name || "Recharge Level")}</strong><small>Order: ${safeNumber(data.order)}</small></div>
-      <div class="admin-level-details">
-        <span>Amount: <strong>${money(data.amount)}</strong></span>
-        <span>Commission: <strong>${money(data.commission)}</strong></span>
-        <span>Task Limit: <strong>${Math.max(1, safeNumber(data.taskLimit))}</strong></span>
-        <span>Status: <strong>${active ? "Active" : "Disabled"}</strong></span>
-      </div>
-      <div class="admin-action-row">
-        <button type="button" class="admin-secondary-btn" onclick="window.editRechargeLevel('${escapeHTML(id)}')">Edit</button>
-        <button type="button" class="admin-secondary-btn" onclick="window.toggleRechargeLevel('${escapeHTML(id)}', ${active})">${active ? "Disable" : "Enable"}</button>
-        <button type="button" class="admin-danger-btn" onclick="window.deleteRechargeLevel('${escapeHTML(id)}')">Delete</button>
-      </div>
-    </div>`;
-}
-
-window.addRechargeLevel = async function () {
-  if (!currentAdmin) return alert("Admin session not found.");
-  const amount = safeNumber($("newRechargeAmount")?.value);
-  const name = $("newRechargeName")?.value.trim() || "";
-  const commission = safeNumber($("newRechargeCommission")?.value);
-  const taskLimit = Math.floor(safeNumber($("newRechargeTaskLimit")?.value || 1));
-  const order = Math.floor(safeNumber($("newRechargeOrder")?.value));
-
-  if (amount <= 0 || !name || commission < 0 || taskLimit < 1 || order < 1) {
-    return alert("Please enter valid recharge level details.");
-  }
-
-  try {
-    await addDoc(collection(db, "rechargeLevels"), {
-      active: true, amount, commission, createdBy: currentAdmin.uid,
-      name, order, taskLimit, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-    });
-    clearInputs(["newRechargeAmount", "newRechargeName", "newRechargeCommission", "newRechargeTaskLimit", "newRechargeOrder"]);
-    alert("Recharge level added successfully.");
-  } catch (err) { alert(err.message || "Failed to add recharge level."); }
-};
-
-window.editRechargeLevel = async function (id) {
-  try {
-    const ref = doc(db, "rechargeLevels", id);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return alert("Recharge level not found.");
-    const data = snap.data();
-
-    const name = prompt("Level Name:", data.name || ""); if (name === null) return;
-    const amount = prompt("Deposit / Recharge Amount:", safeNumber(data.amount)); if (amount === null) return;
-    const commission = prompt("Fixed Team Commission:", safeNumber(data.commission)); if (commission === null) return;
-    const taskLimit = prompt("Task Limit:", Math.max(1, safeNumber(data.taskLimit))); if (taskLimit === null) return;
-    const order = prompt("Order:", safeNumber(data.order)); if (order === null) return;
-
-    if (!name.trim() || safeNumber(amount) <= 0 || safeNumber(commission) < 0 || safeNumber(taskLimit) < 1 || safeNumber(order) < 1) {
-      return alert("Invalid information.");
+      referrerHint = null;
     }
 
-    await updateDoc(ref, {
-      name: name.trim(), amount: safeNumber(amount), commission: safeNumber(commission),
-      taskLimit: Math.floor(safeNumber(taskLimit)), order: Math.floor(safeNumber(order)), updatedAt: serverTimestamp()
-    });
-    alert("Recharge level updated successfully.");
-  } catch (err) { alert(err.message); }
-};
 
-window.toggleRechargeLevel = async (id, active) => {
-  try { await updateDoc(doc(db, "rechargeLevels", id), { active: !active, updatedAt: serverTimestamp() }); }
-  catch (err) { alert(err.message); }
-};
+    /* =====================================================
+       10. TRANSACTION VARIABLES
+    ===================================================== */
 
-window.deleteRechargeLevel = async (id) => {
-  if (!confirm("Delete this recharge level?")) return;
-  try { await deleteDoc(doc(db, "rechargeLevels", id)); }
-  catch (err) { alert(err.message); }
-};
+    let oldTotalRecharge = 0;
 
-/* G TEAM DEPOSIT LEVELS */
-function loadAdminGTeamDepositLevels() {
-  const container = $("adminGTeamDepositLevelsList");
-  if (!container) return;
-  container.innerHTML = loadingHTML("👥", "Loading G Team Deposit Levels...");
+    let approvedTotalRecharge = 0;
 
-  const unsub = onSnapshot(query(collection(db, "rechargeLevels"), orderBy("order", "asc")), snap => {
-    if (snap.empty) return container.innerHTML = emptyHTML("👥", "No G Team Deposit Levels", "Add deposit levels below.");
-    container.innerHTML = snap.docs.map(docSnap => {
-      const data = docSnap.data();
-      const active = data.active !== false;
-      return `
-        <div class="admin-level-card">
-          <div><strong>👥 ${escapeHTML(data.name || "Deposit Level")}</strong><small>Order: ${safeNumber(data.order)}</small></div>
-          <div class="admin-level-details">
-            <span>Deposit: <strong>${money(data.amount)}</strong></span>
-            <span>Team Commission: <strong>${money(data.commission)}</strong></span>
-            <span>Task Limit: <strong>${Math.max(1, safeNumber(data.taskLimit))}</strong></span>
-            <span>Status: <strong>${active ? "Active" : "Disabled"}</strong></span>
-          </div>
-          <div class="admin-action-row">
-            <button type="button" class="admin-secondary-btn" onclick="window.editRechargeLevel('${escapeHTML(docSnap.id)}')">Edit</button>
-            <button type="button" class="admin-secondary-btn" onclick="window.toggleRechargeLevel('${escapeHTML(docSnap.id)}', ${active})">${active ? "Disable" : "Enable"}</button>
-            <button type="button" class="admin-danger-btn" onclick="window.deleteRechargeLevel('${escapeHTML(docSnap.id)}')">Delete</button>
-          </div>
-        </div>`;
-    }).join("");
-  }, () => { container.innerHTML = errorHTML("Failed to load G Team Deposit Levels."); });
-  unsubscribes.push(unsub);
-}
+    let selectedTaskLimit = 0;
 
-window.addGTeamDepositLevel = async function () {
-  if (!currentAdmin) return showMessage("gTeamDepositMessage", "Admin session not found.", "error");
-  const name = $("gTeamDepositName")?.value.trim() || "";
-  const amount = safeNumber($("gTeamDepositAmount")?.value);
-  const commission = safeNumber($("gTeamDepositCommission")?.value);
-  const taskLimit = Math.floor(safeNumber($("gTeamDepositTaskLimit")?.value || 1));
-  const order = Math.floor(safeNumber($("gTeamDepositOrder")?.value));
+    let selectedLevel = null;
 
-  if (!name || amount <= 0 || commission < 0 || taskLimit < 1 || order < 1) {
-    return showMessage("gTeamDepositMessage", "Please enter valid fields.", "error");
+    let commission = 0;
+
+    let commissionCredited = false;
+
+    let upgradeAmount = paymentAmount;
+
+
+    /* =====================================================
+       11. FIRESTORE TRANSACTION
+    ===================================================== */
+
+    await runTransaction(
+      db,
+      async transaction => {
+
+        /* =================================================
+           IMPORTANT:
+
+           ALL transaction.get() CALLS MUST FINISH
+           BEFORE transaction.update()/set().
+        ================================================= */
+
+
+        /* ================================================
+           11.1 FRESH REQUEST
+        ================================================ */
+
+        const freshRequest =
+          await transaction.get(
+            requestRef
+          );
+
+
+        if (
+          !freshRequest.exists()
+        ) {
+
+          throw new Error(
+            "Recharge request no longer exists."
+          );
+
+        }
+
+
+        const freshRequestData =
+          freshRequest.data() || {};
+
+
+        const freshStatus =
+          String(
+            freshRequestData.status ||
+            "pending"
+          )
+            .trim()
+            .toLowerCase();
+
+
+        if (
+          freshStatus !==
+          "pending"
+        ) {
+
+          throw new Error(
+            "Recharge request was already processed."
+          );
+
+        }
+
+
+        /* ================================================
+           11.2 FRESH USER
+        ================================================ */
+
+        const freshUser =
+          await transaction.get(
+            userRef
+          );
+
+
+        if (
+          !freshUser.exists()
+        ) {
+
+          throw new Error(
+            "User account no longer exists."
+          );
+
+        }
+
+
+        const freshUserData =
+          freshUser.data() || {};
+
+
+        /* ================================================
+           11.3 OLD TOTAL RECHARGE
+        ================================================ */
+
+        oldTotalRecharge =
+          safeNumber(
+            freshUserData.totalRecharge
+          );
+
+
+        /* ================================================
+           11.4 CALCULATE NEW TOTAL
+           ------------------------------------------------
+           Example:
+
+           Old Total = 6000
+           Payment   = 4000
+
+           New Total = 10000
+        ================================================ */
+
+        approvedTotalRecharge =
+          oldTotalRecharge +
+          paymentAmount;
+
+
+        if (
+          approvedTotalRecharge <=
+          oldTotalRecharge
+        ) {
+
+          throw new Error(
+            "New total recharge must be greater than the current total recharge."
+          );
+
+        }
+
+
+        /* ================================================
+           11.5 FIND TARGET LEVEL
+           ------------------------------------------------
+           IMPORTANT:
+
+           We do NOT require:
+
+             paymentAmount == level.amount
+
+           Instead we require:
+
+             oldTotalRecharge + paymentAmount
+             == target level amount
+
+           Example:
+
+             6000 + 4000 = 10000
+
+           Therefore target = 10000.
+        ================================================ */
+
+        selectedLevel = null;
+
+
+        for (
+          const rechargeLevel
+          of activeLevels
+        ) {
+
+          if (
+            rechargeLevel.amount ===
+            approvedTotalRecharge
+          ) {
+
+            selectedLevel =
+              rechargeLevel;
+
+            break;
+          }
+
+        }
+
+
+        /* ================================================
+           11.6 IF EXACT TARGET LEVEL NOT FOUND
+        ================================================ */
+
+        if (!selectedLevel) {
+
+          throw new Error(
+
+            "Invalid recharge upgrade.\n\n" +
+
+            "Current Total Recharge: ETB " +
+            oldTotalRecharge.toFixed(2) +
+
+            "\nPayment: ETB " +
+            paymentAmount.toFixed(2) +
+
+            "\nNew Total Recharge: ETB " +
+            approvedTotalRecharge.toFixed(2) +
+
+            "\n\nThe new total must exactly match an active recharge level."
+
+          );
+
+        }
+
+
+        /* ================================================
+           11.7 VERIFY IT IS A REAL UPGRADE
+           ------------------------------------------------
+           Target level must be greater than old level.
+        ================================================ */
+
+        if (
+          selectedLevel.amount <=
+          oldTotalRecharge
+        ) {
+
+          throw new Error(
+            "Selected recharge level is not higher than the user's current level."
+          );
+
+        }
+
+
+        /* ================================================
+           11.8 TASK LIMIT
+        ================================================ */
+
+        selectedTaskLimit =
+          Math.max(
+            0,
+            Math.floor(
+              safeNumber(
+                selectedLevel.taskLimit
+              )
+            )
+          );
+
+
+        /* ================================================
+           11.9 COMMISSION
+           ------------------------------------------------
+           Commission belongs to TARGET LEVEL.
+        ================================================ */
+
+        commission =
+          safeNumber(
+            selectedLevel.commission
+          );
+
+
+        /* ================================================
+           11.10 COMMISSION REFERENCES
+        ================================================ */
+
+        let commissionRef = null;
+
+        let referrerRef = null;
+
+        let commissionSnap = null;
+
+        let referrerSnap = null;
+
+
+        /* ================================================
+           11.11 PREPARE REFERRER DOCUMENT
+        ================================================ */
+
+        if (
+          referrerHint &&
+          referrerHint.id &&
+          referrerHint.id !== userId &&
+          commission > 0
+        ) {
+
+          commissionRef =
+            doc(
+              db,
+              "teamCommissions",
+              requestId
+            );
+
+
+          referrerRef =
+            doc(
+              db,
+              "users",
+              referrerHint.id
+            );
+
+
+          /* ---------------------------------------------
+             READ COMMISSION DOCUMENT
+          --------------------------------------------- */
+
+          commissionSnap =
+            await transaction.get(
+              commissionRef
+            );
+
+
+          /* ---------------------------------------------
+             READ REFERRER DOCUMENT
+          --------------------------------------------- */
+
+          referrerSnap =
+            await transaction.get(
+              referrerRef
+            );
+
+        }
+
+
+        /* =================================================
+           ALL TRANSACTION READS ARE NOW FINISHED.
+           FROM HERE: WRITES ONLY.
+        ================================================= */
+
+
+        /* ================================================
+           11.12 UPDATE USER
+           ------------------------------------------------
+           IMPORTANT:
+
+           totalBalance is NOT changed.
+
+           Only:
+
+             totalRecharge
+             taskLimit
+             taskLevelId
+             taskLevelName
+        ================================================ */
+
+        transaction.update(
+          userRef,
+          {
+
+            totalRecharge:
+              approvedTotalRecharge,
+
+            taskLimit:
+              selectedTaskLimit,
+
+            taskLevelId:
+              selectedLevel.id,
+
+            taskLevelName:
+              selectedLevel.name,
+
+            updatedAt:
+              serverTimestamp()
+
+          }
+        );
+
+
+        /* ================================================
+           11.13 REFERRAL COMMISSION
+        ================================================ */
+
+        if (
+          referrerHint &&
+          referrerHint.id &&
+          referrerHint.id !== userId &&
+          commission > 0 &&
+          commissionSnap &&
+          !commissionSnap.exists() &&
+          referrerSnap &&
+          referrerSnap.exists()
+        ) {
+
+          const referrerData =
+            referrerSnap.data() || {};
+
+
+          const referrerBalance =
+            safeNumber(
+              referrerData.totalBalance
+            );
+
+
+          /* ---------------------------------------------
+             ADD COMMISSION TO REFERRER
+          --------------------------------------------- */
+
+          transaction.update(
+            referrerRef,
+            {
+
+              totalBalance:
+                referrerBalance +
+                commission,
+
+              updatedAt:
+                serverTimestamp()
+
+            }
+          );
+
+
+          /* ---------------------------------------------
+             CREATE COMMISSION RECORD
+          --------------------------------------------- */
+
+          transaction.set(
+            commissionRef,
+            {
+
+              requestId:
+                requestId,
+
+              rechargeUserId:
+                userId,
+
+              referrerUserId:
+                referrerHint.id,
+
+              amount:
+                paymentAmount,
+
+              commission:
+                commission,
+
+              status:
+                "credited",
+
+              createdAt:
+                serverTimestamp(),
+
+              createdBy:
+                currentAdmin.uid
+
+            }
+          );
+
+
+          commissionCredited =
+            true;
+
+        }
+
+
+        /* ================================================
+           11.14 UPDATE RECHARGE REQUEST
+        ================================================ */
+
+        transaction.update(
+          requestRef,
+          {
+
+            status:
+              "approved",
+
+            approvedAt:
+              serverTimestamp(),
+
+            approvedBy:
+              currentAdmin.uid,
+
+            /* -------------------------------------------
+               Actual money paid by user
+            ------------------------------------------- */
+
+            approvedAmount:
+              paymentAmount,
+
+            /* -------------------------------------------
+               Upgrade payment
+            ------------------------------------------- */
+
+            upgradeAmount:
+              paymentAmount,
+
+            /* -------------------------------------------
+               Old total before approval
+            ------------------------------------------- */
+
+            oldTotalRecharge:
+              oldTotalRecharge,
+
+            /* -------------------------------------------
+               Target level
+            ------------------------------------------- */
+
+            levelName:
+              selectedLevel.name,
+
+            levelId:
+              selectedLevel.id,
+
+            levelAmount:
+              selectedLevel.amount,
+
+            /* -------------------------------------------
+               New total after approval
+            ------------------------------------------- */
+
+            approvedTotalRecharge:
+              approvedTotalRecharge,
+
+            /* -------------------------------------------
+               Task limit
+            ------------------------------------------- */
+
+            taskLimit:
+              selectedTaskLimit,
+
+            /* -------------------------------------------
+               Commission
+            ------------------------------------------- */
+
+            commission:
+              commission,
+
+            commissionCredited:
+              commissionCredited,
+
+            updatedAt:
+              serverTimestamp()
+
+          }
+        );
+
+      }
+    );
+
+
+    /* =====================================================
+       12. SUCCESS MESSAGE
+    ===================================================== */
+
+    alert(
+
+      "Recharge / Upgrade approved successfully.\n\n" +
+
+      "Old Total Recharge: ETB " +
+      oldTotalRecharge.toFixed(2) +
+
+      "\n" +
+
+      "Upgrade Payment: ETB " +
+      upgradeAmount.toFixed(2) +
+
+      "\n" +
+
+      "New Total Recharge: ETB " +
+      approvedTotalRecharge.toFixed(2) +
+
+      "\n" +
+
+      "Target Level: " +
+      (
+        selectedLevel?.name ||
+        "N/A"
+      ) +
+
+      "\n" +
+
+      "Level Amount: ETB " +
+      (
+        selectedLevel?.amount ||
+        0
+      ).toFixed(2) +
+
+      "\n" +
+
+      "Task Limit: " +
+      selectedTaskLimit
+
+    );
+
+
+    /* =====================================================
+       13. REFRESH ADMIN RECHARGE LIST
+    ===================================================== */
+
+    if (
+      typeof loadAdminRechargeRequests ===
+      "function"
+    ) {
+
+      await loadAdminRechargeRequests();
+
+    }
+
+
+    /* =====================================================
+       14. REFRESH ADMIN DASHBOARD
+    ===================================================== */
+
+    if (
+      typeof loadAdminDashboard ===
+      "function"
+    ) {
+
+      await loadAdminDashboard();
+
+    }
+
+
+  } catch (error) {
+
+    console.error(
+      "❌ Approve recharge error:",
+      error?.code,
+      error?.message,
+      error
+    );
+
+
+    alert(
+      error?.message ||
+      "Failed to approve recharge."
+    );
+
   }
 
-  try {
-    await addDoc(collection(db, "rechargeLevels"), {
-      name, amount, commission, taskLimit, order, active: true,
-      createdAt: serverTimestamp(), createdBy: currentAdmin.uid, updatedAt: serverTimestamp()
-    });
-    clearInputs(["gTeamDepositName", "gTeamDepositAmount", "gTeamDepositCommission", "gTeamDepositOrder"]);
-    if ($("gTeamDepositTaskLimit")) $("gTeamDepositTaskLimit").value = "1";
-    showMessage("gTeamDepositMessage", "G Team Deposit Level added successfully.", "success");
-  } catch (err) { showMessage("gTeamDepositMessage", err.message || "Failed to add level.", "error"); }
-};
-
-/* WITHDRAW LEVELS */
-function loadAdminWithdrawLevels() {
-  const container = $("adminWithdrawLevelsList");
-  if (!container) return;
-  container.innerHTML = loadingHTML("💸", "Loading Withdraw Levels...");
-
-  const unsub = onSnapshot(query(collection(db, "withdrawLevels"), orderBy("order", "asc")), snap => {
-    if (snap.empty) return container.innerHTML = emptyHTML("💸", "No Withdraw Levels", "Add withdrawal levels below.");
-    container.innerHTML = snap.docs.map(docSnap => withdrawLevelHTML(docSnap.id, docSnap.data())).join("");
-  }, () => { container.innerHTML = errorHTML("Failed to load withdraw levels."); });
-  unsubscribes.push(unsub);
-}
-
-function withdrawLevelHTML(id, data) {
-  const active = data.active !== false;
-  return `
-    <div class="admin-level-card">
-      <div><strong>${escapeHTML(data.name || "Withdraw Level")}</strong><small>Order: ${safeNumber(data.order)}</small></div>
-      <div class="admin-level-details">
-        <span>Amount: <strong>${money(data.amount)}</strong></span>
-        <span>Status: <strong>${active ? "Active" : "Disabled"}</strong></span>
-      </div>
-      <div class="admin-action-row">
-        <button type="button" class="admin-secondary-btn" onclick="window.toggleWithdrawLevel('${escapeHTML(id)}', ${active})">${active ? "Disable" : "Enable"}</button>
-        <button type="button" class="admin-danger-btn" onclick="window.deleteWithdrawLevel('${escapeHTML(id)}')">Delete</button>
-      </div>
-    </div>`;
-}
-
-window.addWithdrawLevel = async function () {
-  const amount = safeNumber($("newWithdrawAmount")?.value);
-  const name = $("newWithdrawName")?.value.trim() || "";
-  const order = Math.floor(safeNumber($("newWithdrawOrder")?.value));
-  if (amount <= 0 || !name || order < 1) return alert("Please enter valid information.");
-
-  try {
-    await addDoc(collection(db, "withdrawLevels"), {
-      amount, name, order, active: true, createdAt: serverTimestamp(),
-      createdBy: currentAdmin?.uid || null, updatedAt: serverTimestamp()
-    });
-    clearInputs(["newWithdrawAmount", "newWithdrawName", "newWithdrawOrder"]);
-    alert("Withdraw level added successfully.");
-  } catch (err) { alert(err.message); }
-};
-
-window.toggleWithdrawLevel = async (id, active) => {
-  try { await updateDoc(doc(db, "withdrawLevels", id), { active: !active, updatedAt: serverTimestamp() }); }
-  catch (err) { alert(err.message); }
-};
-
-window.deleteWithdrawLevel = async (id) => {
-  if (!confirm("Delete level?")) return;
-  try { await deleteDoc(doc(db, "withdrawLevels", id)); }
-  catch (err) { alert(err.message); }
-};
-
-/* PAYMENT METHODS */
-function loadAdminPaymentMethods() {
-  const container = $("adminPaymentMethodsList");
-  if (!container) return;
-  container.innerHTML = loadingHTML("🏦", "Loading Payment Methods...");
-
-  const unsub = onSnapshot(query(collection(db, "settings", "paymentMethods", "methods"), orderBy("order", "asc")), snap => {
-    if (snap.empty) return container.innerHTML = emptyHTML("🏦", "No Payment Methods", "Add a payment method below.");
-    container.innerHTML = snap.docs.map(docSnap => paymentMethodHTML(docSnap.id, docSnap.data())).join("");
-  }, () => { container.innerHTML = errorHTML("Failed to load payment methods."); });
-  unsubscribes.push(unsub);
-}
-
-function paymentMethodHTML(id, data) {
-  const active = data.active !== false;
-  return `
-    <div class="admin-level-card">
-      <div><strong>${escapeHTML(data.name || "Payment Method")}</strong><small>${escapeHTML(data.accountName || "")}</small></div>
-      <div class="admin-level-details">
-        <span>Account: <strong>${escapeHTML(data.accountNumber || "—")}</strong></span>
-        <span>Status: <strong>${active ? "Active" : "Disabled"}</strong></span>
-      </div>
-      <div class="admin-action-row">
-        <button type="button" class="admin-secondary-btn" onclick="window.togglePaymentMethod('${escapeHTML(id)}', ${active})">${active ? "Disable" : "Enable"}</button>
-        <button type="button" class="admin-danger-btn" onclick="window.deletePaymentMethod('${escapeHTML(id)}')">Delete</button>
-      </div>
-    </div>`;
-}
-
-window.addPaymentMethod = async function () {
-  const name = $("newPaymentName")?.value.trim() || "";
-  const accountName = $("newPaymentAccountName")?.value.trim() || "";
-  const accountNumber = $("newPaymentAccountNumber")?.value.trim() || "";
-  const order = Math.floor(safeNumber($("newPaymentOrder")?.value));
-  if (!name || !accountName || !accountNumber || order < 1) return alert("Please complete all fields.");
-
-  try {
-    await addDoc(collection(db, "settings", "paymentMethods", "methods"), {
-      name, accountName, accountNumber, order, active: true,
-      createdAt: serverTimestamp(), createdBy: currentAdmin?.uid || null, updatedAt: serverTimestamp()
-    });
-    clearInputs(["newPaymentName", "newPaymentAccountName", "newPaymentAccountNumber", "newPaymentOrder"]);
-    alert("Payment method added.");
-  } catch (err) { alert(err.message); }
-};
-
-window.togglePaymentMethod = async (id, active) => {
-  try { await updateDoc(doc(db, "settings", "paymentMethods", "methods", id), { active: !active, updatedAt: serverTimestamp() }); }
-  catch (err) { alert(err.message); }
-};
-
-window.deletePaymentMethod = async (id) => {
-  if (!confirm("Delete method?")) return;
-  try { await deleteDoc(doc(db, "settings", "paymentMethods", "methods", id)); }
-  catch (err) { alert(err.message); }
-};
-
-/* USERS */
-function loadAdminUsers() {
-  const container = $("adminUsersList");
-  if (!container) return;
-  container.innerHTML = loadingHTML("👥", "Loading Users...");
-
-  const unsub = onSnapshot(query(collection(db, "users")), snap => {
-    if (snap.empty) return container.innerHTML = emptyHTML("👥", "No Users", "No registered users.");
-    const docs = snap.docs.map(d => ({ id: d.id, data: d.data() })).sort((a, b) => getMillis(b.data.createdAt) - getMillis(a.data.createdAt));
-    container.innerHTML = docs.map(item => userCardHTML(item.id, item.data)).join("");
-  }, () => { container.innerHTML = errorHTML("Failed to load users."); });
-  unsubscribes.push(unsub);
-}
-
-function userCardHTML(id, data) {
-  return `
-    <div class="admin-request-card">
-      <div class="admin-request-header">
-        <div>
-          <strong>${escapeHTML(data.fullName || data.name || "Unknown User")}</strong>
-          <small>${escapeHTML(data.email || "")}</small>
-        </div>
-        <span class="admin-status success">${data.isAdmin ? "ADMIN" : "USER"}</span>
-      </div>
-      <div class="admin-request-body">
-        <div><span>Total Balance</span><strong>${money(data.totalBalance)}</strong></div>
-        <div><span>Total Recharge</span><strong>${money(data.totalRecharge)}</strong></div>
-        <div><span>VIP Level</span><strong>${escapeHTML(data.vipLevel ?? "VIP 0")}</strong></div>
-        <div><span>Referral Code</span><strong>${escapeHTML(data.referralCode || "—")}</strong></div>
-        <div><span>Created</span><strong>${escapeHTML(formatDate(data.createdAt))}</strong></div>
-      </div>
-    </div>`;
-}
-
-/* TASKS & SETTINGS */
-async function loadTaskSettings() {
-  try {
-    const snap = await getDoc(doc(db, "settings", "taskSettings"));
-    if (!snap.exists()) return;
-    const data = snap.data();
-    if ($("taskSettingsActive")) $("taskSettingsActive").value = String(data.active !== false);
-    if ($("taskSettingsCount")) $("taskSettingsCount").value = safeNumber(data.dailyTaskCount);
-    if ($("taskSettingsReward")) $("taskSettingsReward").value = safeNumber(data.rewardPerTask);
-  } catch (err) { console.error("Task settings error:", err); }
-}
-
-window.saveTaskSettings = async function () {
-  if (!currentAdmin) return showMessage("taskSettingsMessage", "Admin session not found.", "error");
-  const active = $("taskSettingsActive") ? $("taskSettingsActive").value !== "false" : true;
-  const dailyTaskCount = Math.floor(safeNumber($("taskSettingsCount")?.value));
-  const rewardPerTask = safeNumber($("taskSettingsReward")?.value);
-
-  if (dailyTaskCount < 0 || rewardPerTask < 0) return showMessage("taskSettingsMessage", "Enter valid settings.", "error");
-
-  try {
-    await setDoc(doc(db, "settings", "taskSettings"), {
-      active, dailyTaskCount, rewardPerTask, updatedAt: serverTimestamp(), updatedBy: currentAdmin.uid
-    }, { merge: true });
-    showMessage("taskSettingsMessage", "Task settings saved successfully.", "success");
-  } catch (err) { showMessage("taskSettingsMessage", err.message || "Failed to save settings.", "error"); }
-};
-
-function loadAdminTasks() {
-  const container = $("adminTasksList");
-  if (!container) return;
-  container.innerHTML = loadingHTML("📋", "Loading Tasks...");
-
-  const unsub = onSnapshot(query(collection(db, "tasks"), orderBy("order", "asc")), snap => {
-    if (snap.empty) return container.innerHTML = emptyHTML("📋", "No Tasks", "Add daily task.");
-    container.innerHTML = snap.docs.map(d => taskCardHTML(d.id, d.data())).join("");
-  }, (err) => { container.innerHTML = errorHTML(`Failed to load tasks: ${err.message}`); });
-  unsubscribes.push(unsub);
-}
-
-function taskCardHTML(id, data) {
-  const active = data.active !== false;
-  return `
-    <div class="admin-level-card">
-      <div><strong>${escapeHTML(data.title)}</strong><small>${escapeHTML(data.description)}</small></div>
-      <div class="admin-level-details">
-        <span>Order: <strong>${safeNumber(data.order)}</strong></span>
-        <span>Status: <strong>${active ? "Active" : "Disabled"}</strong></span>
-      </div>
-      <div class="admin-action-row">
-        <button type="button" class="admin-secondary-btn" onclick="window.toggleAdminTask('${escapeHTML(id)}', ${active})">${active ? "Disable" : "Enable"}</button>
-        <button type="button" class="admin-danger-btn" onclick="window.deleteAdminTask('${escapeHTML(id)}')">Delete</button>
-      </div>
-    </div>`;
-}
-
-window.addAdminTask = async function () {
-  if (!currentAdmin) return showMessage("adminTaskMessage", "Admin session not found.", "error");
-  const title = $("newTaskTitle")?.value.trim() || "";
-  const description = $("newTaskDescription")?.value.trim() || "";
-  const order = Math.floor(safeNumber($("newTaskOrder")?.value));
-  const active = $("newTaskActive") ? $("newTaskActive").value !== "false" : true;
-
-  if (!title || !description || order < 1) return showMessage("adminTaskMessage", "All fields are required.", "error");
-
-  try {
-    await addDoc(collection(db, "tasks"), {
-      title, description, order, active, createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(), createdBy: currentAdmin.uid
-    });
-    clearInputs(["newTaskTitle", "newTaskDescription", "newTaskOrder"]);
-    if ($("newTaskActive")) $("newTaskActive").value = "true";
-    showMessage("adminTaskMessage", "Task added successfully.", "success");
-  } catch (err) { showMessage("adminTaskMessage", err.message || "Failed to add task.", "error"); }
-};
-
-window.toggleAdminTask = async (id, active) => {
-  try { await updateDoc(doc(db, "tasks", id), { active: !active, updatedAt: serverTimestamp() }); } 
-  catch (err) { alert(err.message); }
-};
-
-window.deleteAdminTask = async (id) => {
-  if (!confirm("Delete task?")) return;
-  try { await deleteDoc(doc(db, "tasks", id)); } 
-  catch (err) { alert(err.message); }
 };
 
 /* =========================================================
-   ANNOUNCEMENTS - ADMIN MANAGEMENT (OPTIMIZED)
-   FIRESTORE COLLECTION: message
+   WITHDRAW REQUESTS
 ========================================================= */
 
-// --- LOAD ANNOUNCEMENTS ---
-function loadAdminAnnouncements() {
-  const container = $("adminAnnouncementsList");
-  if (!container) return;
+window.loadAdminWithdrawRequests =
+  async function () {
 
-  container.innerHTML = loadingHTML("📢", "Loading Announcements...");
+    const container =
+      getElementByIds(
+        "withdrawRequestsList",
+        "adminWithdrawList"
+      );
 
-  const unsub = onSnapshot(
-    query(collection(db, "message")),
-    snap => {
-      if (snap.empty) {
-        container.innerHTML = emptyHTML("📢", "No Announcements", "Create an announcement.");
+
+    if (!container) {
+
+      console.error(
+        "Withdraw request list not found."
+      );
+
+      return;
+    }
+
+
+    container.innerHTML =
+      loadingHTML(
+        "💸",
+        "Loading Withdraw Requests..."
+      );
+
+
+    const filterElement =
+      getElementByIds(
+        "withdrawStatusFilter",
+        "adminWithdrawStatusFilter"
+      );
+
+
+    try {
+
+      const withdrawQuery =
+        query(
+          collection(
+            db,
+            "withdrawRequests"
+          ),
+          orderBy(
+            "createdAt",
+            "desc"
+          )
+        );
+
+
+      const unsubscribe =
+        onSnapshot(
+          withdrawQuery,
+
+          snapshot => {
+
+            const filter =
+              String(
+                filterElement?.value ||
+                "all"
+              ).toLowerCase();
+
+
+            let items =
+              snapshot.docs
+                .map(
+                  docSnap => ({
+                    id:
+                      docSnap.id,
+
+                    ...(docSnap.data() || {})
+                  })
+                );
+
+
+            if (
+              filter !== "all"
+            ) {
+
+              items =
+                items.filter(
+                  item =>
+                    String(
+                      item.status ||
+                      ""
+                    ).toLowerCase() ===
+                    filter
+                );
+            }
+
+
+            if (
+              !items.length
+            ) {
+
+              container.innerHTML =
+                emptyHTML(
+                  "💸",
+                  "No Withdraw Requests"
+                );
+
+              return;
+            }
+
+
+            container.innerHTML =
+              items
+                .map(
+                  item =>
+                    withdrawCardHTML(
+                      item.id,
+                      item
+                    )
+                )
+                .join("");
+          },
+
+          error => {
+
+            console.error(
+              "Load withdraw requests error:",
+              error
+            );
+
+            container.innerHTML =
+              errorHTML(
+                error?.message
+              );
+          }
+        );
+
+
+      unsubscribes.push(
+        unsubscribe
+      );
+
+
+      if (
+        filterElement &&
+        !filterElement.dataset.listenerAttached
+      ) {
+
+        filterElement.addEventListener(
+          "change",
+          () => {
+
+            loadAdminWithdrawRequests();
+          }
+        );
+
+        filterElement.dataset.listenerAttached =
+          "true";
+      }
+
+    } catch (error) {
+
+      console.error(
+        "Withdraw listener error:",
+        error
+      );
+
+      container.innerHTML =
+        errorHTML(
+          error?.message
+        );
+    }
+  };
+
+
+/* =========================================================
+   WITHDRAW CARD
+========================================================= */
+
+function withdrawCardHTML(
+  id,
+  data,
+  compact = false
+) {
+
+  const status =
+    String(
+      data.status ||
+      "pending"
+    ).toLowerCase();
+
+
+  const amount =
+    safeNumber(
+      data.amount
+    );
+
+
+  const paymentMethod =
+    data.paymentMethod ||
+    data.method ||
+    "—";
+
+
+  const accountName =
+    data.accountName ||
+    data.paymentAccountName ||
+    "—";
+
+
+  const accountNumber =
+    data.accountNumber ||
+    data.paymentAccountNumber ||
+    "—";
+
+
+  const balanceDeducted =
+    data.balanceDeducted === true;
+
+
+  const refundProcessed =
+    data.refundProcessed === true;
+
+
+  return `
+
+    <div class="admin-request-card">
+
+      <div class="admin-card-header">
+
+        <div>
+
+          <h3>
+            💸 Withdraw
+          </h3>
+
+          <small>
+            ${escapeHTML(id)}
+          </small>
+
+        </div>
+
+        <span
+          class="status-${escapeHTML(status)}"
+        >
+          ${escapeHTML(
+            status.toUpperCase()
+          )}
+        </span>
+
+      </div>
+
+
+      <div class="admin-card-grid">
+
+        <div>
+          <small>Amount</small>
+          <strong>
+            ETB ${formatAdminMoney(amount)}
+          </strong>
+        </div>
+
+        <div>
+          <small>Payment</small>
+          <strong>
+            ${escapeHTML(paymentMethod)}
+          </strong>
+        </div>
+
+        <div>
+          <small>Account Name</small>
+          <strong>
+            ${escapeHTML(accountName)}
+          </strong>
+        </div>
+
+        <div>
+          <small>Account Number</small>
+          <strong>
+            ${escapeHTML(accountNumber)}
+          </strong>
+        </div>
+
+        <div>
+          <small>Balance Deducted</small>
+          <strong>
+            ${balanceDeducted ? "Yes" : "No"}
+          </strong>
+        </div>
+
+        <div>
+          <small>Refund Processed</small>
+          <strong>
+            ${refundProcessed ? "Yes" : "No"}
+          </strong>
+        </div>
+
+        <div>
+          <small>Date</small>
+          <strong>
+            ${escapeHTML(
+              formatDate(
+                data.createdAt
+              )
+            )}
+          </strong>
+        </div>
+
+      </div>
+
+
+      ${
+        !compact &&
+        status === "pending"
+          ? `
+            <div class="admin-action-row">
+
+              <button
+                type="button"
+                class="admin-primary-btn"
+                onclick="window.approveWithdraw('${escapeHTML(id)}')"
+              >
+                ✅ Approve
+              </button>
+
+              <button
+                type="button"
+                class="admin-danger-btn"
+                onclick="window.rejectWithdraw('${escapeHTML(id)}')"
+              >
+                ❌ Reject
+              </button>
+
+            </div>
+          `
+          : ""
+      }
+
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   APPROVE WITHDRAW
+========================================================= */
+
+window.approveWithdraw =
+  async function (requestId) {
+
+    if (!currentAdmin) {
+
+      return alert(
+        "Admin session not found."
+      );
+    }
+
+
+    if (!requestId) {
+      return;
+    }
+
+
+    try {
+
+      const requestRef =
+        doc(
+          db,
+          "withdrawRequests",
+          requestId
+        );
+
+
+      await runTransaction(
+        db,
+        async transaction => {
+
+          const requestSnap =
+            await transaction.get(
+              requestRef
+            );
+
+
+          if (
+            !requestSnap.exists()
+          ) {
+
+            throw new Error(
+              "Withdraw request not found."
+            );
+          }
+
+
+          const data =
+            requestSnap.data() ||
+            {};
+
+
+          if (
+            String(
+              data.status ||
+              ""
+            ).toLowerCase() !==
+            "pending"
+          ) {
+
+            throw new Error(
+              "Withdraw request has already been processed."
+            );
+          }
+
+
+          const userId =
+            data.userId ||
+            data.uid;
+
+
+          if (!userId) {
+
+            throw new Error(
+              "User ID is missing."
+            );
+          }
+
+
+          const userRef =
+            doc(
+              db,
+              "users",
+              userId
+            );
+
+
+          /*
+             IMPORTANT:
+             If submitWithdraw() already deducted
+             the balance, DO NOT deduct again.
+          */
+
+          if (
+            data.balanceDeducted !==
+            true
+          ) {
+
+            const userSnap =
+              await transaction.get(
+                userRef
+              );
+
+
+            if (
+              !userSnap.exists()
+            ) {
+
+              throw new Error(
+                "User account not found."
+              );
+            }
+
+
+            const userData =
+              userSnap.data() ||
+              {};
+
+
+            const balance =
+              safeNumber(
+                userData.totalBalance
+              );
+
+
+            const amount =
+              safeNumber(
+                data.amount
+              );
+
+
+            if (
+              balance < amount
+            ) {
+
+              throw new Error(
+                "Insufficient user balance."
+              );
+            }
+
+
+            transaction.update(
+              userRef,
+              {
+                totalBalance:
+                  balance - amount,
+
+                updatedAt:
+                  serverTimestamp()
+              }
+            );
+          }
+
+
+          transaction.update(
+            requestRef,
+            {
+              status:
+                "approved",
+
+              balanceDeducted:
+                true,
+
+              approvedAt:
+                serverTimestamp(),
+
+              approvedBy:
+                currentAdmin.uid
+            }
+          );
+        }
+      );
+
+
+      alert(
+        "Withdrawal approved successfully."
+      );
+
+
+    } catch (error) {
+
+      console.error(
+        "Approve withdraw error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to approve withdrawal."
+      );
+    }
+  };
+
+
+/* =========================================================
+   REJECT WITHDRAW
+========================================================= */
+
+window.rejectWithdraw =
+  async function (requestId) {
+
+    if (!currentAdmin) {
+
+      return alert(
+        "Admin session not found."
+      );
+    }
+
+
+    const reason =
+      prompt(
+        "Enter rejection reason:",
+        "Withdrawal request rejected."
+      );
+
+
+    if (
+      reason === null
+    ) {
+      return;
+    }
+
+
+    try {
+
+      const requestRef =
+        doc(
+          db,
+          "withdrawRequests",
+          requestId
+        );
+
+
+      await runTransaction(
+        db,
+        async transaction => {
+
+          const requestSnap =
+            await transaction.get(
+              requestRef
+            );
+
+
+          if (
+            !requestSnap.exists()
+          ) {
+
+            throw new Error(
+              "Withdraw request not found."
+            );
+          }
+
+
+          const data =
+            requestSnap.data() ||
+            {};
+
+
+          if (
+            String(
+              data.status ||
+              ""
+            ).toLowerCase() !==
+            "pending"
+          ) {
+
+            throw new Error(
+              "Withdraw request has already been processed."
+            );
+          }
+
+
+          const userId =
+            data.userId ||
+            data.uid;
+
+
+          const amount =
+            safeNumber(
+              data.amount
+            );
+
+
+          /*
+             Refund only when:
+             1. balance was deducted
+             2. refund was not already processed
+          */
+
+          const shouldRefund =
+            data.balanceDeducted === true &&
+            data.refundProcessed !== true;
+
+
+          if (
+            shouldRefund
+          ) {
+
+            if (!userId) {
+
+              throw new Error(
+                "User ID is missing for refund."
+              );
+            }
+
+
+            const userRef =
+              doc(
+                db,
+                "users",
+                userId
+              );
+
+
+            const userSnap =
+              await transaction.get(
+                userRef
+              );
+
+
+            if (
+              !userSnap.exists()
+            ) {
+
+              throw new Error(
+                "User account not found for refund."
+              );
+            }
+
+
+            const userData =
+              userSnap.data() ||
+              {};
+
+
+            const balance =
+              safeNumber(
+                userData.totalBalance
+              );
+
+
+            transaction.update(
+              userRef,
+              {
+                totalBalance:
+                  balance +
+                  amount,
+
+                updatedAt:
+                  serverTimestamp()
+              }
+            );
+          }
+
+
+          transaction.update(
+            requestRef,
+            {
+              status:
+                "rejected",
+
+              rejectionReason:
+                reason.trim() ||
+                "Rejected",
+
+              rejectedAt:
+                serverTimestamp(),
+
+              rejectedBy:
+                currentAdmin.uid,
+
+              balanceRefunded:
+                shouldRefund,
+
+              refundProcessed:
+                shouldRefund
+                  ? true
+                  : data.refundProcessed === true
+            }
+          );
+        }
+      );
+
+
+      alert(
+        "Withdrawal rejected successfully."
+      );
+
+
+    } catch (error) {
+
+      console.error(
+        "Reject withdraw error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to reject withdrawal."
+      );
+    }
+  };
+
+
+/* =========================================================
+   VIP LEVELS
+========================================================= */
+
+async function loadAdminVipLevels() {
+
+  const container =
+    getElementByIds(
+      "adminVipLevelsList",
+      "adminVIPLevelsList"
+    );
+
+
+  if (!container) {
+    return;
+  }
+
+
+  container.innerHTML =
+    loadingHTML(
+      "👑",
+      "Loading VIP Levels..."
+    );
+
+
+  try {
+
+    const snapshot =
+      await getDocs(
+        query(
+          collection(
+            db,
+            "vip_levels"
+          ),
+          orderBy(
+            "level",
+            "asc"
+          )
+        )
+      );
+
+
+    const items =
+      snapshot.docs.map(
+        docSnap => ({
+          id:
+            docSnap.id,
+
+          ...(docSnap.data() || {})
+        })
+      );
+
+
+    container.innerHTML =
+      items.length
+        ? items
+            .map(
+              item =>
+                vipCardHTML(
+                  item.id,
+                  item
+                )
+            )
+            .join("")
+        : emptyHTML(
+            "👑",
+            "No VIP Levels"
+          );
+
+  } catch (error) {
+
+    console.error(
+      "Load VIP levels error:",
+      error
+    );
+
+    container.innerHTML =
+      errorHTML(
+        error?.message
+      );
+  }
+}
+
+
+/* =========================================================
+   VIP CARD
+========================================================= */
+
+function vipCardHTML(
+  id,
+  data
+) {
+
+  const active =
+    data.active !== false;
+
+
+  return `
+
+    <div class="admin-level-card">
+
+      <div class="admin-card-header">
+
+        <div>
+
+          <h3>
+            👑 VIP
+            ${safeNumber(data.level)}
+            ${
+              data.name
+                ? `- ${escapeHTML(data.name)}`
+                : ""
+            }
+          </h3>
+
+          <span
+            class="${
+              active
+                ? "status-active"
+                : "status-inactive"
+            }"
+          >
+            ${active ? "Active" : "Inactive"}
+          </span>
+
+        </div>
+
+      </div>
+
+
+      <div class="admin-card-grid">
+
+        <div>
+          <small>Price</small>
+          <strong>
+            ETB ${formatAdminMoney(data.price)}
+          </strong>
+        </div>
+
+        <div>
+          <small>Profit</small>
+          <strong>
+            ETB ${formatAdminMoney(data.profit)}
+          </strong>
+        </div>
+
+        <div>
+          <small>Valid Days</small>
+          <strong>
+            ${safeNumber(data.validDays)}
+          </strong>
+        </div>
+
+      </div>
+
+
+      <div class="admin-action-row">
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.editAdminVipLevel('${escapeHTML(id)}')"
+        >
+          ✏️ Edit
+        </button>
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.toggleAdminVipLevel('${escapeHTML(id)}', ${active})"
+        >
+          ${active ? "Disable" : "Activate"}
+        </button>
+
+        <button
+          type="button"
+          class="admin-danger-btn"
+          onclick="window.deleteAdminVipLevel('${escapeHTML(id)}')"
+        >
+          🗑️ Delete
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+}
+
+
+/* =========================================================
+   ADD / UPDATE VIP
+========================================================= */
+
+window.addVipLevel =
+  async function () {
+
+    if (!currentAdmin) {
+      return showMessage(
+        "adminVipMessage",
+        "Admin session not found.",
+        "error"
+      );
+    }
+
+
+    const level =
+      Math.floor(
+        safeNumber(
+          $("newVipLevel")?.value
+        )
+      );
+
+
+    const name =
+      $("newVipName")
+        ?.value
+        ?.trim() ||
+      `VIP ${level}`;
+
+
+    const price =
+      safeNumber(
+        $("newVipPrice")?.value
+      );
+
+
+    const profit =
+      safeNumber(
+        $("newVipProfit")?.value
+      );
+
+
+    const validDays =
+      Math.floor(
+        safeNumber(
+          $("newVipValidDays")?.value
+        )
+      );
+
+
+    if (level < 1) {
+
+      return showMessage(
+        "adminVipMessage",
+        "VIP level must be at least 1.",
+        "error"
+      );
+    }
+
+
+    if (
+      price < 0 ||
+      profit < 0 ||
+      validDays < 1
+    ) {
+
+      return showMessage(
+        "adminVipMessage",
+        "Please enter valid VIP values.",
+        "error"
+      );
+    }
+
+
+    try {
+
+      const activeElement =
+        $("newVipActive");
+
+
+      const active =
+        activeElement
+          ? activeElement.checked !== false
+          : true;
+
+
+      const snapshot =
+        await getDocs(
+          query(
+            collection(
+              db,
+              "vip_levels"
+            ),
+            where(
+              "level",
+              "==",
+              level
+            ),
+            limit(1)
+          )
+        );
+
+
+      const data = {
+
+        level,
+
+        name,
+
+        price,
+
+        profit,
+
+        validDays,
+
+        active,
+
+        updatedAt:
+          serverTimestamp(),
+
+        updatedBy:
+          currentAdmin.uid
+      };
+
+
+      if (
+        !snapshot.empty
+      ) {
+
+        await updateDoc(
+          snapshot.docs[0].ref,
+          data
+        );
+
+      } else {
+
+        await addDoc(
+          collection(
+            db,
+            "vip_levels"
+          ),
+          {
+            ...data,
+
+            createdAt:
+              serverTimestamp(),
+
+            createdBy:
+              currentAdmin.uid
+          }
+        );
+      }
+
+
+      clearInputs(
+        "newVipLevel",
+        "newVipName",
+        "newVipPrice",
+        "newVipProfit",
+        "newVipValidDays"
+      );
+
+
+      showMessage(
+        "adminVipMessage",
+        "VIP level saved successfully.",
+        "success"
+      );
+
+
+      await loadAdminVipLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Save VIP error:",
+        error
+      );
+
+      showMessage(
+        "adminVipMessage",
+        error?.message ||
+        "Failed to save VIP level.",
+        "error"
+      );
+    }
+  };
+
+
+/* =========================================================
+   EDIT VIP
+========================================================= */
+
+window.editAdminVipLevel =
+  async function (id) {
+
+    try {
+
+      const snap =
+        await getDoc(
+          doc(
+            db,
+            "vip_levels",
+            id
+          )
+        );
+
+
+      if (!snap.exists()) {
+        return alert(
+          "VIP level not found."
+        );
+      }
+
+
+      const data =
+        snap.data() || {};
+
+
+      const level =
+        prompt(
+          "VIP Level:",
+          data.level ?? ""
+        );
+
+
+      if (level === null) {
         return;
       }
 
-      const docs = snap.docs
-        .map(d => ({ id: d.id, data: d.data() || {} }))
-        .sort((a, b) => getMillis(b.data.createdAt) - getMillis(a.data.createdAt));
 
-      container.innerHTML = docs.map(item => adminAnnouncementCardHTML(item.id, item.data)).join("");
-    },
-    err => {
-      console.error("Admin announcement listener error:", err);
-      container.innerHTML = errorHTML("Failed to load announcements.");
+      const name =
+        prompt(
+          "VIP Name:",
+          data.name || ""
+        );
+
+
+      if (name === null) {
+        return;
+      }
+
+
+      const price =
+        prompt(
+          "Price:",
+          data.price ?? 0
+        );
+
+
+      if (price === null) {
+        return;
+      }
+
+
+      const profit =
+        prompt(
+          "Profit:",
+          data.profit ?? 0
+        );
+
+
+      if (profit === null) {
+        return;
+      }
+
+
+      const validDays =
+        prompt(
+          "Valid Days:",
+          data.validDays ?? 1
+        );
+
+
+      if (
+        validDays === null
+      ) {
+        return;
+      }
+
+
+      await updateDoc(
+        doc(
+          db,
+          "vip_levels",
+          id
+        ),
+        {
+          level:
+            Math.floor(
+              safeNumber(level)
+            ),
+
+          name:
+            name.trim(),
+
+          price:
+            safeNumber(price),
+
+          profit:
+            safeNumber(profit),
+
+          validDays:
+            Math.floor(
+              safeNumber(validDays)
+            ),
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      await loadAdminVipLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Edit VIP error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to edit VIP level."
+      );
     }
-  );
+  };
 
-  unsubscribes.push(unsub);
-}
 
-// --- ANNOUNCEMENT CARD HTML ---
-function adminAnnouncementCardHTML(id, data) {
-  const active = data.active !== false;
-  const important = data.important === true;
-  const title = String(data.title || "Announcement");
-  const message = String(data.message || "");
-  const priorityText = important ? "Important" : "Normal";
-  const priorityIcon = important ? "⭐" : "📌";
-  const statusText = active ? "Active" : "Disabled";
-  const statusIcon = active ? "🟢" : "🔴";
-  const safeId = escapeHTML(String(id));
+/* =========================================================
+   TOGGLE VIP
+========================================================= */
 
-  return `
-    <div class="admin-level-card announcement-admin-card">
-      <div class="admin-announcement-header">
-        <div class="admin-announcement-title">
-          <strong>📢 ${escapeHTML(title)}</strong>
-          <small>${escapeHTML(message)}</small>
-        </div>
-      </div>
-      <div class="admin-level-details">
-        <span>Status: <strong>${statusIcon} ${statusText}</strong></span>
-        <span>Priority: <strong>${priorityIcon} ${priorityText}</strong></span>
-        <span>Created: <strong>${escapeHTML(formatDate(data.createdAt))}</strong></span>
-      </div>
-      <div class="admin-action-row">
-        <button type="button" class="admin-secondary-btn" onclick="window.editAdminAnnouncement('${safeId}')">✏️ Edit</button>
-        <button type="button" class="admin-secondary-btn" onclick="window.toggleAdminAnnouncement('${safeId}', ${active})">${active ? "🔴 Disable" : "🟢 Enable"}</button>
-        <button type="button" class="admin-danger-btn" onclick="window.deleteAdminAnnouncement('${safeId}')">🗑️ Delete</button>
-      </div>
-    </div>`;
-}
+window.toggleAdminVipLevel =
+  async function (
+    id,
+    active
+  ) {
 
-// --- ADD ANNOUNCEMENT ---
-window.addAdminAnnouncement = async function () {
-  const title = $("newAnnouncementTitle")?.value.trim() || "Announcement";
-  const message = $("newAnnouncementMessage")?.value.trim() || "";
-  const active = $("newAnnouncementActive")?.value !== "false";
-  const important = $("newAnnouncementImportant")?.value === "true";
+    try {
 
-  if (!message) {
-    return showMessage("adminAnnouncementMessage", "Enter announcement message.", "error");
-  }
+      await updateDoc(
+        doc(
+          db,
+          "vip_levels",
+          id
+        ),
+        {
+          active:
+            !active,
 
-  try {
-    await addDoc(collection(db, "message"), {
-      title,
-      message,
-      active,
-      important,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      createdBy: currentAdmin?.uid || null
-    });
+          updatedAt:
+            serverTimestamp(),
 
-    clearInputs(["newAnnouncementTitle", "newAnnouncementMessage"]);
-    if ($("newAnnouncementActive")) $("newAnnouncementActive").value = "true";
-    if ($("newAnnouncementImportant")) $("newAnnouncementImportant").value = "false";
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
 
-    showMessage("adminAnnouncementMessage", "Announcement added successfully.", "success");
-  } catch (err) {
-    console.error("Add announcement error:", err);
-    showMessage("adminAnnouncementMessage", err.message || "Failed to add announcement.", "error");
-  }
-};
 
-// --- EDIT ANNOUNCEMENT ---
-window.editAdminAnnouncement = async function (id) {
-  try {
-    const announcementRef = doc(db, "message", id);
-    const snap = await getDoc(announcementRef);
+      await loadAdminVipLevels();
 
-    if (!snap.exists()) return alert("Announcement not found.");
+    } catch (error) {
 
-    const data = snap.data() || {};
-    const oldTitle = String(data.title || "");
-    const oldMessage = String(data.message || "");
-    const oldImportant = data.important === true;
-    const oldActive = data.active !== false;
+      console.error(
+        "Toggle VIP error:",
+        error
+      );
 
-    const newTitle = prompt("Edit Announcement Title:", oldTitle);
-    if (newTitle === null) return;
+      alert(
+        error?.message ||
+        "Failed to update VIP."
+      );
+    }
+  };
 
-    const newMessage = prompt("Edit Announcement Message:", oldMessage);
-    if (newMessage === null) return;
-    if (!newMessage.trim()) return alert("Announcement message cannot be empty.");
 
-    const importantAnswer = confirm(
-      oldImportant
-        ? "This announcement is currently IMPORTANT.\n\nOK = Important\nCancel = Normal"
-        : "Make this announcement IMPORTANT?\n\nOK = Important\nCancel = Normal"
+/* =========================================================
+   DELETE VIP
+========================================================= */
+
+window.deleteAdminVipLevel =
+  async function (id) {
+
+    if (
+      !confirm(
+        "Delete this VIP level?"
+      )
+    ) {
+      return;
+    }
+
+
+    try {
+
+      await deleteDoc(
+        doc(
+          db,
+          "vip_levels",
+          id
+        )
+      );
+
+
+      await loadAdminVipLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Delete VIP error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to delete VIP."
+      );
+    }
+  };
+
+
+/* =========================================================
+   RECHARGE LEVELS
+========================================================= */
+
+async function loadAdminRechargeLevels() {
+
+  const container =
+    getElementByIds(
+      "adminRechargeLevelsList",
+      "adminLevelsList"
     );
 
-    await updateDoc(announcementRef, {
-      title: newTitle.trim() || "Announcement",
-      message: newMessage.trim(),
-      important: importantAnswer,
-      active: oldActive,
-      updatedAt: serverTimestamp()
-    });
 
-    showMessage("adminAnnouncementMessage", "Announcement updated successfully.", "success");
-  } catch (err) {
-    console.error("Edit announcement error:", err);
-    alert(err.message || "Failed to edit announcement.");
+  if (!container) {
+    return;
   }
-};
 
-// --- ENABLE / DISABLE ---
-window.toggleAdminAnnouncement = async function (id, active) {
-  try {
-    await updateDoc(doc(db, "message", id), {
-      active: !active,
-      updatedAt: serverTimestamp()
-    });
-  } catch (err) {
-    console.error("Toggle announcement error:", err);
-    alert(err.message || "Failed to update announcement status.");
-  }
-};
 
-// --- DELETE ---
-window.deleteAdminAnnouncement = async function (id) {
-  if (!confirm("Are you sure you want to delete this announcement?")) return;
+  container.innerHTML =
+    loadingHTML(
+      "💰",
+      "Loading Recharge Levels..."
+    );
+
 
   try {
-    await deleteDoc(doc(db, "message", id));
-    showMessage("adminAnnouncementMessage", "Announcement deleted successfully.", "success");
-  } catch (err) {
-    console.error("Delete announcement error:", err);
-    alert(err.message || "Failed to delete announcement.");
-  }
-};
 
-/* CALENDAR CONTROL */
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "rechargeLevels"
+        )
+      );
+
+
+    const items =
+      snapshot.docs
+        .map(
+          docSnap => ({
+            id:
+              docSnap.id,
+
+            ...(docSnap.data() || {})
+          })
+        )
+        .sort(
+          (a, b) =>
+            safeNumber(a.order) -
+            safeNumber(b.order)
+        );
+
+
+    container.innerHTML =
+      items.length
+        ? items
+            .map(
+              item =>
+                rechargeLevelHTML(
+                  item.id,
+                  item
+                )
+            )
+            .join("")
+        : emptyHTML(
+            "💰",
+            "No Recharge Levels"
+          );
+
+  } catch (error) {
+
+    console.error(
+      "Load recharge levels error:",
+      error
+    );
+
+    container.innerHTML =
+      errorHTML(
+        error?.message
+      );
+  }
+}
+
+
+/* =========================================================
+   RECHARGE LEVEL CARD
+========================================================= */
+
+function rechargeLevelHTML(
+  id,
+  data
+) {
+
+  const active =
+    data.active !== false;
+
+
+  return `
+
+    <div class="admin-level-card">
+
+      <div class="admin-card-header">
+
+        <div>
+
+          <h3>
+            💰
+            ${escapeHTML(
+              data.name ||
+              "Recharge Level"
+            )}
+          </h3>
+
+          <span>
+            Order:
+            ${safeNumber(data.order)}
+          </span>
+
+        </div>
+
+        <span
+          class="${
+            active
+              ? "status-active"
+              : "status-inactive"
+          }"
+        >
+          ${active ? "Active" : "Inactive"}
+        </span>
+
+      </div>
+
+
+      <div class="admin-card-grid">
+
+        <div>
+          <small>Amount</small>
+          <strong>
+            ETB ${formatAdminMoney(data.amount)}
+          </strong>
+        </div>
+
+        <div>
+          <small>Commission</small>
+          <strong>
+            ETB ${formatAdminMoney(data.commission)}
+          </strong>
+        </div>
+
+        <div>
+          <small>Task Limit</small>
+          <strong>
+            ${safeNumber(data.taskLimit)}
+          </strong>
+        </div>
+
+      </div>
+
+
+      <div class="admin-action-row">
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.editRechargeLevel('${escapeHTML(id)}')"
+        >
+          ✏️ Edit
+        </button>
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.toggleRechargeLevel('${escapeHTML(id)}', ${active})"
+        >
+          ${active ? "Disable" : "Activate"}
+        </button>
+
+        <button
+          type="button"
+          class="admin-danger-btn"
+          onclick="window.deleteRechargeLevel('${escapeHTML(id)}')"
+        >
+          🗑️ Delete
+        </button>
+
+      </div>
+
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   ADD RECHARGE LEVEL
+========================================================= */
+
+window.addRechargeLevel =
+  async function () {
+
+    if (!currentAdmin) {
+      return showMessage(
+        "adminRechargeLevelMessage",
+        "Admin session not found.",
+        "error"
+      );
+    }
+
+
+    const name =
+      getElementByIds(
+        "newRechargeName",
+        "newRechargeLevelName"
+      )
+        ?.value
+        ?.trim() ||
+      "Recharge Level";
+
+
+    const amount =
+      safeNumber(
+        getElementByIds(
+          "newRechargeAmount",
+          "newRechargeLevelAmount"
+        )?.value
+      );
+
+
+    const commission =
+      safeNumber(
+        getElementByIds(
+          "newRechargeCommission",
+          "newRechargeLevelCommission"
+        )?.value
+      );
+
+
+    const taskLimit =
+      Math.floor(
+        safeNumber(
+          getElementByIds(
+            "newRechargeTaskLimit",
+            "newRechargeLevelTaskLimit"
+          )?.value
+        )
+      );
+
+
+    const order =
+      Math.floor(
+        safeNumber(
+          getElementByIds(
+            "newRechargeOrder",
+            "newRechargeLevelOrder"
+          )?.value
+        )
+      );
+
+
+    const activeElement =
+      getElementByIds(
+        "newRechargeLevelActive"
+      );
+
+
+    const active =
+      activeElement
+        ? activeElement.checked !== false
+        : true;
+
+
+    if (
+      amount <= 0
+    ) {
+
+      return showMessage(
+        "adminRechargeLevelMessage",
+        "Recharge amount must be greater than 0.",
+        "error"
+      );
+    }
+
+
+    if (
+      commission < 0 ||
+      taskLimit < 0
+    ) {
+
+      return showMessage(
+        "adminRechargeLevelMessage",
+        "Commission and task limit cannot be negative.",
+        "error"
+      );
+    }
+
+
+    try {
+
+      await addDoc(
+        collection(
+          db,
+          "rechargeLevels"
+        ),
+        {
+          name,
+
+          amount,
+
+          commission,
+
+          taskLimit,
+
+          order,
+
+          active,
+
+          createdAt:
+            serverTimestamp(),
+
+          createdBy:
+            currentAdmin.uid,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      clearInputs(
+        "newRechargeName",
+        "newRechargeAmount",
+        "newRechargeCommission",
+        "newRechargeTaskLimit",
+        "newRechargeOrder",
+        "newRechargeLevelName",
+        "newRechargeLevelAmount",
+        "newRechargeLevelCommission",
+        "newRechargeLevelTaskLimit",
+        "newRechargeLevelOrder"
+      );
+
+
+      showMessage(
+        "adminRechargeLevelMessage",
+        "Recharge level added successfully.",
+        "success"
+      );
+
+
+      await loadAdminRechargeLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Add recharge level error:",
+        error
+      );
+
+      showMessage(
+        "adminRechargeLevelMessage",
+        error?.message ||
+        "Failed to add recharge level.",
+        "error"
+      );
+    }
+  };
+
+
+/* =========================================================
+   EDIT RECHARGE LEVEL
+========================================================= */
+
+window.editRechargeLevel =
+  async function (id) {
+
+    try {
+
+      const ref =
+        doc(
+          db,
+          "rechargeLevels",
+          id
+        );
+
+
+      const snap =
+        await getDoc(ref);
+
+
+      if (!snap.exists()) {
+        return alert(
+          "Recharge level not found."
+        );
+      }
+
+
+      const data =
+        snap.data() || {};
+
+
+      const name =
+        prompt(
+          "Name:",
+          data.name || ""
+        );
+
+
+      if (name === null) {
+        return;
+      }
+
+
+      const amount =
+        prompt(
+          "Amount:",
+          data.amount ?? 0
+        );
+
+
+      if (amount === null) {
+        return;
+      }
+
+
+      const commission =
+        prompt(
+          "Commission:",
+          data.commission ?? 0
+        );
+
+
+      if (
+        commission === null
+      ) {
+        return;
+      }
+
+
+      const taskLimit =
+        prompt(
+          "Task Limit:",
+          data.taskLimit ?? 0
+        );
+
+
+      if (
+        taskLimit === null
+      ) {
+        return;
+      }
+
+
+      const order =
+        prompt(
+          "Order:",
+          data.order ?? 0
+        );
+
+
+      if (order === null) {
+        return;
+      }
+
+
+      await updateDoc(
+        ref,
+        {
+          name:
+            name.trim(),
+
+          amount:
+            safeNumber(amount),
+
+          commission:
+            safeNumber(commission),
+
+          taskLimit:
+            Math.floor(
+              safeNumber(taskLimit)
+            ),
+
+          order:
+            Math.floor(
+              safeNumber(order)
+            ),
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      await loadAdminRechargeLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Edit recharge level error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to edit recharge level."
+      );
+    }
+  };
+
+
+/* =========================================================
+   TOGGLE RECHARGE LEVEL
+========================================================= */
+
+window.toggleRechargeLevel =
+  async function (
+    id,
+    active
+  ) {
+
+    try {
+
+      await updateDoc(
+        doc(
+          db,
+          "rechargeLevels",
+          id
+        ),
+        {
+          active:
+            !active,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      await loadAdminRechargeLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Toggle recharge level error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to update recharge level."
+      );
+    }
+  };
+
+
+/* =========================================================
+   DELETE RECHARGE LEVEL
+========================================================= */
+
+window.deleteRechargeLevel =
+  async function (id) {
+
+    if (
+      !confirm(
+        "Delete this recharge level?"
+      )
+    ) {
+      return;
+    }
+
+
+    try {
+
+      await deleteDoc(
+        doc(
+          db,
+          "rechargeLevels",
+          id
+        )
+      );
+
+
+      await loadAdminRechargeLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Delete recharge level error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to delete recharge level."
+      );
+    }
+  };
+
+
+/* =========================================================
+   TEAM DEPOSIT LEVELS
+   SAME rechargeLevels COLLECTION
+========================================================= */
+
+async function loadAdminTeamDepositLevels() {
+
+  window.ensureAdminTeamDepositSection?.();
+
+
+  const container =
+    getElementByIds(
+      "adminTeamDepositLevelsList",
+      "adminGTeamDepositLevelsList"
+    );
+
+
+  if (!container) {
+
+    console.error(
+      "Team Deposit Levels list not found."
+    );
+
+    return;
+  }
+
+
+  container.innerHTML =
+    loadingHTML(
+      "👥",
+      "Loading Team Deposit Levels..."
+    );
+
+
+  try {
+
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "rechargeLevels"
+        )
+      );
+
+
+    const items =
+      snapshot.docs
+        .map(
+          docSnap => ({
+            id:
+              docSnap.id,
+
+            ...(docSnap.data() || {})
+          })
+        )
+        .sort(
+          (a, b) =>
+            safeNumber(a.order) -
+            safeNumber(b.order)
+        );
+
+
+    const countElement =
+      getElementByIds(
+        "adminTeamDepositCount"
+      );
+
+
+    if (countElement) {
+
+      countElement.textContent =
+        String(
+          items.length
+        );
+    }
+
+
+    if (!items.length) {
+
+      container.innerHTML =
+        emptyHTML(
+          "👥",
+          "No Team Deposit Levels",
+          "Add Recharge Levels first."
+        );
+
+      return;
+    }
+
+
+    container.innerHTML =
+      items
+        .map(
+          item =>
+            rechargeLevelHTML(
+              item.id,
+              item
+            )
+        )
+        .join("");
+
+  } catch (error) {
+
+    console.error(
+      "Load Team Deposit Levels error:",
+      error
+    );
+
+    container.innerHTML =
+      errorHTML(
+        error?.message
+      );
+  }
+}
+
+
+/* =========================================================
+   WITHDRAW LEVELS
+========================================================= */
+
+async function loadAdminWithdrawLevels() {
+
+  const container =
+    getElementByIds(
+      "adminWithdrawLevelsList"
+    );
+
+
+  if (!container) {
+    return;
+  }
+
+
+  container.innerHTML =
+    loadingHTML(
+      "💸",
+      "Loading Withdraw Levels..."
+    );
+
+
+  try {
+
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "withdrawLevels"
+        )
+      );
+
+
+    const items =
+      snapshot.docs
+        .map(
+          docSnap => ({
+            id:
+              docSnap.id,
+
+            ...(docSnap.data() || {})
+          })
+        )
+        .sort(
+          (a, b) =>
+            safeNumber(a.order) -
+            safeNumber(b.order)
+        );
+
+
+    container.innerHTML =
+      items.length
+        ? items
+            .map(
+              item =>
+                withdrawLevelHTML(
+                  item.id,
+                  item
+                )
+            )
+            .join("")
+        : emptyHTML(
+            "💸",
+            "No Withdraw Levels"
+          );
+
+  } catch (error) {
+
+    console.error(
+      "Load withdraw levels error:",
+      error
+    );
+
+    container.innerHTML =
+      errorHTML(
+        error?.message
+      );
+  }
+}
+
+
+/* =========================================================
+   WITHDRAW LEVEL CARD
+========================================================= */
+
+function withdrawLevelHTML(
+  id,
+  data
+) {
+
+  const active =
+    data.active !== false;
+
+
+  return `
+
+    <div class="admin-level-card">
+
+      <div class="admin-card-header">
+
+        <div>
+
+          <h3>
+            💸
+            ${escapeHTML(
+              data.name ||
+              "Withdraw Level"
+            )}
+          </h3>
+
+          <span>
+            Order:
+            ${safeNumber(data.order)}
+          </span>
+
+        </div>
+
+        <span
+          class="${
+            active
+              ? "status-active"
+              : "status-inactive"
+          }"
+        >
+          ${active ? "Active" : "Inactive"}
+        </span>
+
+      </div>
+
+
+      <div class="admin-card-grid">
+
+        <div>
+          <small>Amount</small>
+          <strong>
+            ETB ${formatAdminMoney(data.amount)}
+          </strong>
+        </div>
+
+      </div>
+
+
+      <div class="admin-action-row">
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.editWithdrawLevel('${escapeHTML(id)}')"
+        >
+          ✏️ Edit
+        </button>
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.toggleWithdrawLevel('${escapeHTML(id)}', ${active})"
+        >
+          ${active ? "Disable" : "Activate"}
+        </button>
+
+        <button
+          type="button"
+          class="admin-danger-btn"
+          onclick="window.deleteWithdrawLevel('${escapeHTML(id)}')"
+        >
+          🗑️ Delete
+        </button>
+
+      </div>
+
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   ADD WITHDRAW LEVEL
+========================================================= */
+
+window.addWithdrawLevel =
+  async function () {
+
+    const name =
+      getElementByIds(
+        "newWithdrawName",
+        "newWithdrawLevelName"
+      )
+        ?.value
+        ?.trim() ||
+      "Withdraw Level";
+
+
+    const amount =
+      safeNumber(
+        getElementByIds(
+          "newWithdrawAmount",
+          "newWithdrawLevelAmount"
+        )?.value
+      );
+
+
+    const order =
+      Math.floor(
+        safeNumber(
+          getElementByIds(
+            "newWithdrawOrder",
+            "newWithdrawLevelOrder"
+          )?.value
+        )
+      );
+
+
+    if (
+      amount <= 0
+    ) {
+
+      return showMessage(
+        "adminWithdrawLevelMessage",
+        "Withdraw amount must be greater than 0.",
+        "error"
+      );
+    }
+
+
+    try {
+
+      await addDoc(
+        collection(
+          db,
+          "withdrawLevels"
+        ),
+        {
+          name,
+
+          amount,
+
+          order,
+
+          active: true,
+
+          createdAt:
+            serverTimestamp(),
+
+          createdBy:
+            currentAdmin.uid,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      clearInputs(
+        "newWithdrawName",
+        "newWithdrawAmount",
+        "newWithdrawOrder",
+        "newWithdrawLevelName",
+        "newWithdrawLevelAmount",
+        "newWithdrawLevelOrder"
+      );
+
+
+      showMessage(
+        "adminWithdrawLevelMessage",
+        "Withdraw level added successfully.",
+        "success"
+      );
+
+
+      await loadAdminWithdrawLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Add withdraw level error:",
+        error
+      );
+
+      showMessage(
+        "adminWithdrawLevelMessage",
+        error?.message ||
+        "Failed to add withdraw level.",
+        "error"
+      );
+    }
+  };
+
+
+/* =========================================================
+   EDIT WITHDRAW LEVEL
+========================================================= */
+
+window.editWithdrawLevel =
+  async function (id) {
+
+    try {
+
+      const ref =
+        doc(
+          db,
+          "withdrawLevels",
+          id
+        );
+
+
+      const snap =
+        await getDoc(ref);
+
+
+      if (!snap.exists()) {
+        return alert(
+          "Withdraw level not found."
+        );
+      }
+
+
+      const data =
+        snap.data() || {};
+
+
+      const name =
+        prompt(
+          "Name:",
+          data.name || ""
+        );
+
+
+      if (name === null) {
+        return;
+      }
+
+
+      const amount =
+        prompt(
+          "Amount:",
+          data.amount ?? 0
+        );
+
+
+      if (amount === null) {
+        return;
+      }
+
+
+      const order =
+        prompt(
+          "Order:",
+          data.order ?? 0
+        );
+
+
+      if (order === null) {
+        return;
+      }
+
+
+      await updateDoc(
+        ref,
+        {
+          name:
+            name.trim(),
+
+          amount:
+            safeNumber(amount),
+
+          order:
+            Math.floor(
+              safeNumber(order)
+            ),
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      await loadAdminWithdrawLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Edit withdraw level error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to edit withdraw level."
+      );
+    }
+  };
+
+
+/* =========================================================
+   TOGGLE WITHDRAW LEVEL
+========================================================= */
+
+window.toggleWithdrawLevel =
+  async function (
+    id,
+    active
+  ) {
+
+    try {
+
+      await updateDoc(
+        doc(
+          db,
+          "withdrawLevels",
+          id
+        ),
+        {
+          active:
+            !active,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      await loadAdminWithdrawLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Toggle withdraw level error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to update withdraw level."
+      );
+    }
+  };
+
+
+/* =========================================================
+   DELETE WITHDRAW LEVEL
+========================================================= */
+
+window.deleteWithdrawLevel =
+  async function (id) {
+
+    if (
+      !confirm(
+        "Delete this withdraw level?"
+      )
+    ) {
+      return;
+    }
+
+
+    try {
+
+      await deleteDoc(
+        doc(
+          db,
+          "withdrawLevels",
+          id
+        )
+      );
+
+
+      await loadAdminWithdrawLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Delete withdraw level error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to delete withdraw level."
+      );
+    }
+  };
+
+
+/* =========================================================
+   PAYMENT METHODS
+========================================================= */
+
+async function loadAdminPaymentMethods() {
+
+  const container =
+    getElementByIds(
+      "adminPaymentMethodsList",
+      "adminPaymentsList"
+    );
+
+
+  if (!container) {
+    return;
+  }
+
+
+  container.innerHTML =
+    loadingHTML(
+      "💳",
+      "Loading Payment Methods..."
+    );
+
+
+  try {
+
+    const ref =
+      collection(
+        db,
+        "settings",
+        "paymentMethods",
+        "methods"
+      );
+
+
+    const snapshot =
+      await getDocs(ref);
+
+
+    const items =
+      snapshot.docs
+        .map(
+          docSnap => ({
+            id:
+              docSnap.id,
+
+            ...(docSnap.data() || {})
+          })
+        )
+        .sort(
+          (a, b) =>
+            safeNumber(a.order) -
+            safeNumber(b.order)
+        );
+
+
+    container.innerHTML =
+      items.length
+        ? items
+            .map(
+              item =>
+                paymentMethodHTML(
+                  item.id,
+                  item
+                )
+            )
+            .join("")
+        : emptyHTML(
+            "💳",
+            "No Payment Methods"
+          );
+
+  } catch (error) {
+
+    console.error(
+      "Load payment methods error:",
+      error
+    );
+
+    container.innerHTML =
+      errorHTML(
+        error?.message
+      );
+  }
+}
+
+
+/* =========================================================
+   PAYMENT METHOD CARD
+========================================================= */
+
+function paymentMethodHTML(
+  id,
+  data
+) {
+
+  const active =
+    data.active !== false;
+
+
+  return `
+
+    <div class="admin-level-card">
+
+      <div class="admin-card-header">
+
+        <div>
+
+          <h3>
+            💳
+            ${escapeHTML(
+              data.name ||
+              "Payment Method"
+            )}
+          </h3>
+
+        </div>
+
+        <span
+          class="${
+            active
+              ? "status-active"
+              : "status-inactive"
+          }"
+        >
+          ${active ? "Active" : "Inactive"}
+        </span>
+
+      </div>
+
+
+      <div class="admin-card-grid">
+
+        <div>
+          <small>Account Name</small>
+          <strong>
+            ${escapeHTML(
+              data.accountName ||
+              "—"
+            )}
+          </strong>
+        </div>
+
+        <div>
+          <small>Account Number</small>
+          <strong>
+            ${escapeHTML(
+              data.accountNumber ||
+              "—"
+            )}
+          </strong>
+        </div>
+
+        <div>
+          <small>Order</small>
+          <strong>
+            ${safeNumber(data.order)}
+          </strong>
+        </div>
+
+      </div>
+
+
+      <div class="admin-action-row">
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.editPaymentMethod('${escapeHTML(id)}')"
+        >
+          ✏️ Edit
+        </button>
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.togglePaymentMethod('${escapeHTML(id)}', ${active})"
+        >
+          ${active ? "Disable" : "Activate"}
+        </button>
+
+        <button
+          type="button"
+          class="admin-danger-btn"
+          onclick="window.deletePaymentMethod('${escapeHTML(id)}')"
+        >
+          🗑️ Delete
+        </button>
+
+      </div>
+
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   ADD PAYMENT METHOD
+========================================================= */
+
+window.addPaymentMethod =
+  async function () {
+
+    const name =
+      getElementByIds(
+        "newPaymentName",
+        "newPaymentMethodName"
+      )
+        ?.value
+        ?.trim();
+
+
+    const accountName =
+      $("newPaymentAccountName")
+        ?.value
+        ?.trim();
+
+
+    const accountNumber =
+      $("newPaymentAccountNumber")
+        ?.value
+        ?.trim();
+
+
+    const order =
+      Math.floor(
+        safeNumber(
+          getElementByIds(
+            "newPaymentOrder",
+            "newPaymentMethodOrder"
+          )?.value
+        )
+      );
+
+
+    if (
+      !name ||
+      !accountName ||
+      !accountNumber
+    ) {
+
+      return showMessage(
+        "adminPaymentMessage",
+        "Please fill all payment method fields.",
+        "error"
+      );
+    }
+
+
+    try {
+
+      await addDoc(
+        collection(
+          db,
+          "settings",
+          "paymentMethods",
+          "methods"
+        ),
+        {
+          name,
+
+          accountName,
+
+          accountNumber,
+
+          order,
+
+          active: true,
+
+          createdAt:
+            serverTimestamp(),
+
+          createdBy:
+            currentAdmin.uid,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      clearInputs(
+        "newPaymentName",
+        "newPaymentMethodName",
+        "newPaymentAccountName",
+        "newPaymentAccountNumber",
+        "newPaymentOrder",
+        "newPaymentMethodOrder"
+      );
+
+
+      showMessage(
+        "adminPaymentMessage",
+        "Payment method added successfully.",
+        "success"
+      );
+
+
+      await loadAdminPaymentMethods();
+
+    } catch (error) {
+
+      console.error(
+        "Add payment method error:",
+        error
+      );
+
+      showMessage(
+        "adminPaymentMessage",
+        error?.message ||
+        "Failed to add payment method.",
+        "error"
+      );
+    }
+  };
+
+
+/* =========================================================
+   EDIT PAYMENT METHOD
+========================================================= */
+
+window.editPaymentMethod =
+  async function (id) {
+
+    try {
+
+      const ref =
+        doc(
+          db,
+          "settings",
+          "paymentMethods",
+          "methods",
+          id
+        );
+
+
+      const snap =
+        await getDoc(ref);
+
+
+      if (!snap.exists()) {
+        return alert(
+          "Payment method not found."
+        );
+      }
+
+
+      const data =
+        snap.data() || {};
+
+
+      const name =
+        prompt(
+          "Payment method name:",
+          data.name || ""
+        );
+
+
+      if (name === null) {
+        return;
+      }
+
+
+      const accountName =
+        prompt(
+          "Account name:",
+          data.accountName || ""
+        );
+
+
+      if (
+        accountName === null
+      ) {
+        return;
+      }
+
+
+      const accountNumber =
+        prompt(
+          "Account number:",
+          data.accountNumber || ""
+        );
+
+
+      if (
+        accountNumber === null
+      ) {
+        return;
+      }
+
+
+      const order =
+        prompt(
+          "Order:",
+          data.order ?? 0
+        );
+
+
+      if (order === null) {
+        return;
+      }
+
+
+      await updateDoc(
+        ref,
+        {
+          name:
+            name.trim(),
+
+          accountName:
+            accountName.trim(),
+
+          accountNumber:
+            accountNumber.trim(),
+
+          order:
+            Math.floor(
+              safeNumber(order)
+            ),
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      await loadAdminPaymentMethods();
+
+    } catch (error) {
+
+      console.error(
+        "Edit payment method error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to edit payment method."
+      );
+    }
+  };
+
+
+/* =========================================================
+   TOGGLE PAYMENT METHOD
+========================================================= */
+
+window.togglePaymentMethod =
+  async function (
+    id,
+    active
+  ) {
+
+    try {
+
+      await updateDoc(
+        doc(
+          db,
+          "settings",
+          "paymentMethods",
+          "methods",
+          id
+        ),
+        {
+          active:
+            !active,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      await loadAdminPaymentMethods();
+
+    } catch (error) {
+
+      console.error(
+        "Toggle payment method error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to update payment method."
+      );
+    }
+  };
+
+
+/* =========================================================
+   DELETE PAYMENT METHOD
+========================================================= */
+
+window.deletePaymentMethod =
+  async function (id) {
+
+    if (
+      !confirm(
+        "Delete this payment method?"
+      )
+    ) {
+      return;
+    }
+
+
+    try {
+
+      await deleteDoc(
+        doc(
+          db,
+          "settings",
+          "paymentMethods",
+          "methods",
+          id
+        )
+      );
+
+
+      await loadAdminPaymentMethods();
+
+    } catch (error) {
+
+      console.error(
+        "Delete payment method error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to delete payment method."
+      );
+    }
+  };
+
+
+/* =========================================================
+   USERS
+========================================================= */
+
+async function loadAdminUsers() {
+
+  const container =
+    $("adminUsersList");
+
+
+  if (!container) {
+    return;
+  }
+
+
+  container.innerHTML =
+    loadingHTML(
+      "👤",
+      "Loading Users..."
+    );
+
+
+  try {
+
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "users"
+        )
+      );
+
+
+    const items =
+      snapshot.docs
+        .map(
+          docSnap => ({
+            id:
+              docSnap.id,
+
+            ...(docSnap.data() || {})
+          })
+        )
+        .sort(
+          (a, b) =>
+            getMillis(b.createdAt) -
+            getMillis(a.createdAt)
+        );
+
+
+    container.innerHTML =
+      items.length
+        ? items
+            .map(
+              item =>
+                userCardHTML(
+                  item.id,
+                  item
+                )
+            )
+            .join("")
+        : emptyHTML(
+            "👤",
+            "No Users"
+          );
+
+  } catch (error) {
+
+    console.error(
+      "Load users error:",
+      error
+    );
+
+    container.innerHTML =
+      errorHTML(
+        error?.message
+      );
+  }
+}
+
+
+/* =========================================================
+   USER CARD
+========================================================= */
+
+function userCardHTML(
+  id,
+  data
+) {
+
+  return `
+
+    <div class="admin-user-card">
+
+      <div class="admin-card-header">
+
+        <div>
+
+          <h3>
+            👤
+            ${escapeHTML(
+              data.fullName ||
+              data.name ||
+              "User"
+            )}
+          </h3>
+
+          <small>
+            ${escapeHTML(
+              data.email ||
+              "No email"
+            )}
+          </small>
+
+        </div>
+
+        <span>
+          ${
+            data.isAdmin === true ||
+            data.role === "admin"
+              ? "ADMIN"
+              : "USER"
+          }
+        </span>
+
+      </div>
+
+
+      <div class="admin-card-grid">
+
+        <div>
+          <small>Total Balance</small>
+          <strong>
+            ETB ${formatAdminMoney(data.totalBalance)}
+          </strong>
+        </div>
+
+        <div>
+          <small>Total Recharge</small>
+          <strong>
+            ETB ${formatAdminMoney(data.totalRecharge)}
+          </strong>
+        </div>
+
+        <div>
+          <small>VIP</small>
+          <strong>
+            ${escapeHTML(
+              data.vipLevel ||
+              "VIP 0"
+            )}
+          </strong>
+        </div>
+
+        <div>
+          <small>Referral Code</small>
+          <strong>
+            ${escapeHTML(
+              data.referralCode ||
+              "—"
+            )}
+          </strong>
+        </div>
+
+        <div>
+          <small>Account Number</small>
+          <strong>
+            ${escapeHTML(
+              data.accountNumber ||
+              "—"
+            )}
+          </strong>
+        </div>
+
+        <div>
+          <small>Created</small>
+          <strong>
+            ${escapeHTML(
+              formatDate(
+                data.createdAt
+              )
+            )}
+          </strong>
+        </div>
+
+      </div>
+
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   TASK SETTINGS
+========================================================= */
+
+async function loadTaskSettings() {
+
+  try {
+
+    const ref =
+      doc(
+        db,
+        "settings",
+        "taskSettings"
+      );
+
+
+    const snap =
+      await getDoc(ref);
+
+
+    if (!snap.exists()) {
+      return;
+    }
+
+
+    const data =
+      snap.data() || {};
+
+
+    const active =
+      $("taskSettingsActive");
+
+
+    const reward =
+      $("taskSettingsReward");
+
+
+    if (active) {
+
+      active.checked =
+        data.active !== false;
+    }
+
+
+    if (reward) {
+
+      reward.value =
+        safeNumber(
+          data.rewardPerTask
+        );
+    }
+
+  } catch (error) {
+
+    console.error(
+      "Load task settings error:",
+      error
+    );
+  }
+}
+
+
+/* =========================================================
+   SAVE TASK SETTINGS
+========================================================= */
+
+window.saveTaskSettings =
+  async function () {
+
+    if (!currentAdmin) {
+
+      return showMessage(
+        "adminTaskMessage",
+        "Admin session not found.",
+        "error"
+      );
+    }
+
+
+    const active =
+      $("taskSettingsActive")
+        ?.checked !== false;
+
+
+    const rewardPerTask =
+      safeNumber(
+        $("taskSettingsReward")
+          ?.value
+      );
+
+
+    if (
+      rewardPerTask < 0
+    ) {
+
+      return showMessage(
+        "adminTaskMessage",
+        "Reward cannot be negative.",
+        "error"
+      );
+    }
+
+
+    try {
+
+      await setDoc(
+        doc(
+          db,
+          "settings",
+          "taskSettings"
+        ),
+        {
+          active,
+
+          rewardPerTask,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        },
+        {
+          merge: true
+        }
+      );
+
+
+      showMessage(
+        "adminTaskMessage",
+        "Task settings saved successfully.",
+        "success"
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Save task settings error:",
+        error
+      );
+
+      showMessage(
+        "adminTaskMessage",
+        error?.message ||
+        "Failed to save task settings.",
+        "error"
+      );
+    }
+  };
+
+
+/* =========================================================
+   TASKS
+========================================================= */
+
+async function loadAdminTasks() {
+
+  const container =
+    $("adminTasksList");
+
+
+  if (!container) {
+    return;
+  }
+
+
+  container.innerHTML =
+    loadingHTML(
+      "📝",
+      "Loading Tasks..."
+    );
+
+
+  try {
+
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "tasks"
+        )
+      );
+
+
+    const items =
+      snapshot.docs
+        .map(
+          docSnap => ({
+            id:
+              docSnap.id,
+
+            ...(docSnap.data() || {})
+          })
+        )
+        .sort(
+          (a, b) =>
+            safeNumber(a.order) -
+            safeNumber(b.order)
+        );
+
+
+    container.innerHTML =
+      items.length
+        ? items
+            .map(
+              item =>
+                taskCardHTML(
+                  item.id,
+                  item
+                )
+            )
+            .join("")
+        : emptyHTML(
+            "📝",
+            "No Tasks"
+          );
+
+  } catch (error) {
+
+    console.error(
+      "Load tasks error:",
+      error
+    );
+
+    container.innerHTML =
+      errorHTML(
+        error?.message
+      );
+  }
+}
+
+
+/* =========================================================
+   TASK CARD
+========================================================= */
+
+function taskCardHTML(
+  id,
+  data
+) {
+
+  const active =
+    data.active !== false;
+
+
+  return `
+
+    <div class="admin-task-card">
+
+      <div class="admin-card-header">
+
+        <div>
+
+          <h3>
+            📝
+            ${escapeHTML(
+              data.title ||
+              data.name ||
+              "Task"
+            )}
+          </h3>
+
+          <small>
+            Order:
+            ${safeNumber(data.order)}
+          </small>
+
+        </div>
+
+        <span
+          class="${
+            active
+              ? "status-active"
+              : "status-inactive"
+          }"
+        >
+          ${active ? "Active" : "Inactive"}
+        </span>
+
+      </div>
+
+
+      <p>
+        ${escapeHTML(
+          data.description ||
+          data.message ||
+          ""
+        )}
+      </p>
+
+
+      <div class="admin-card-grid">
+
+        <div>
+          <small>Reward</small>
+          <strong>
+            ETB
+            ${formatAdminMoney(
+              data.reward
+            )}
+          </strong>
+        </div>
+
+      </div>
+
+
+      <div class="admin-action-row">
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.editAdminTask('${escapeHTML(id)}')"
+        >
+          ✏️ Edit
+        </button>
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.toggleAdminTask('${escapeHTML(id)}', ${active})"
+        >
+          ${active ? "Disable" : "Activate"}
+        </button>
+
+        <button
+          type="button"
+          class="admin-danger-btn"
+          onclick="window.deleteAdminTask('${escapeHTML(id)}')"
+        >
+          🗑️ Delete
+        </button>
+
+      </div>
+
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   ADD TASK
+========================================================= */
+
+window.addAdminTask =
+  async function () {
+
+    const title =
+      $("newTaskTitle")
+        ?.value
+        ?.trim();
+
+
+    const description =
+      $("newTaskDescription")
+        ?.value
+        ?.trim();
+
+
+    const order =
+      Math.floor(
+        safeNumber(
+          $("newTaskOrder")
+            ?.value
+        )
+      );
+
+
+    const active =
+      $("newTaskActive")
+        ? $("newTaskActive").checked !== false
+        : true;
+
+
+    if (!title) {
+
+      return showMessage(
+        "adminTaskMessage",
+        "Task title is required.",
+        "error"
+      );
+    }
+
+
+    try {
+
+      /*
+         Reward comes from global
+         settings/taskSettings.
+      */
+
+      const settingsSnap =
+        await getDoc(
+          doc(
+            db,
+            "settings",
+            "taskSettings"
+          )
+        );
+
+
+      const settings =
+        settingsSnap.exists()
+          ? settingsSnap.data() || {}
+          : {};
+
+
+      const reward =
+        safeNumber(
+          settings.rewardPerTask
+        );
+
+
+      await addDoc(
+        collection(
+          db,
+          "tasks"
+        ),
+        {
+          title,
+
+          name:
+            title,
+
+          description,
+
+          message:
+            description,
+
+          order,
+
+          reward,
+
+          active,
+
+          createdAt:
+            serverTimestamp(),
+
+          createdBy:
+            currentAdmin.uid,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      clearInputs(
+        "newTaskTitle",
+        "newTaskDescription",
+        "newTaskOrder"
+      );
+
+
+      showMessage(
+        "adminTaskMessage",
+        "Task added successfully.",
+        "success"
+      );
+
+
+      await loadAdminTasks();
+
+    } catch (error) {
+
+      console.error(
+        "Add task error:",
+        error
+      );
+
+      showMessage(
+        "adminTaskMessage",
+        error?.message ||
+        "Failed to add task.",
+        "error"
+      );
+    }
+  };
+
+
+/* =========================================================
+   EDIT TASK
+========================================================= */
+
+window.editAdminTask =
+  async function (id) {
+
+    try {
+
+      const ref =
+        doc(
+          db,
+          "tasks",
+          id
+        );
+
+
+      const snap =
+        await getDoc(ref);
+
+
+      if (!snap.exists()) {
+        return alert(
+          "Task not found."
+        );
+      }
+
+
+      const data =
+        snap.data() || {};
+
+
+      const title =
+        prompt(
+          "Task title:",
+          data.title ||
+          data.name ||
+          ""
+        );
+
+
+      if (title === null) {
+        return;
+      }
+
+
+      const description =
+        prompt(
+          "Description:",
+          data.description ||
+          data.message ||
+          ""
+        );
+
+
+      if (
+        description === null
+      ) {
+        return;
+      }
+
+
+      const order =
+        prompt(
+          "Order:",
+          data.order ?? 0
+        );
+
+
+      if (order === null) {
+        return;
+      }
+
+
+      const reward =
+        prompt(
+          "Reward:",
+          data.reward ?? 0
+        );
+
+
+      if (
+        reward === null
+      ) {
+        return;
+      }
+
+
+      await updateDoc(
+        ref,
+        {
+          title:
+            title.trim(),
+
+          name:
+            title.trim(),
+
+          description:
+            description.trim(),
+
+          message:
+            description.trim(),
+
+          order:
+            Math.floor(
+              safeNumber(order)
+            ),
+
+          reward:
+            safeNumber(reward),
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      await loadAdminTasks();
+
+    } catch (error) {
+
+      console.error(
+        "Edit task error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to edit task."
+      );
+    }
+  };
+
+
+/* =========================================================
+   TOGGLE TASK
+========================================================= */
+
+window.toggleAdminTask =
+  async function (
+    id,
+    active
+  ) {
+
+    try {
+
+      await updateDoc(
+        doc(
+          db,
+          "tasks",
+          id
+        ),
+        {
+          active:
+            !active,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      await loadAdminTasks();
+
+    } catch (error) {
+
+      console.error(
+        "Toggle task error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to update task."
+      );
+    }
+  };
+
+
+/* =========================================================
+   DELETE TASK
+========================================================= */
+
+window.deleteAdminTask =
+  async function (id) {
+
+    if (
+      !confirm(
+        "Delete this task?"
+      )
+    ) {
+      return;
+    }
+
+
+    try {
+
+      await deleteDoc(
+        doc(
+          db,
+          "tasks",
+          id
+        )
+      );
+
+
+      await loadAdminTasks();
+
+    } catch (error) {
+
+      console.error(
+        "Delete task error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to delete task."
+      );
+    }
+  };
+
+
+/* =========================================================
+   ANNOUNCEMENTS
+========================================================= */
+
+async function loadAdminAnnouncements() {
+
+  const container =
+    $("adminAnnouncementsList");
+
+
+  if (!container) {
+    return;
+  }
+
+
+  container.innerHTML =
+    loadingHTML(
+      "📢",
+      "Loading Announcements..."
+    );
+
+
+  try {
+
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "message"
+        )
+      );
+
+
+    const items =
+      snapshot.docs
+        .map(
+          docSnap => ({
+            id:
+              docSnap.id,
+
+            ...(docSnap.data() || {})
+          })
+        )
+        .sort(
+          (a, b) =>
+            getMillis(b.createdAt) -
+            getMillis(a.createdAt)
+        );
+
+
+    container.innerHTML =
+      items.length
+        ? items
+            .map(
+              item =>
+                adminAnnouncementCardHTML(
+                  item.id,
+                  item
+                )
+            )
+            .join("")
+        : emptyHTML(
+            "📢",
+            "No Announcements"
+          );
+
+  } catch (error) {
+
+    console.error(
+      "Load announcements error:",
+      error
+    );
+
+    container.innerHTML =
+      errorHTML(
+        error?.message
+      );
+  }
+}
+
+
+/* =========================================================
+   ANNOUNCEMENT CARD
+========================================================= */
+
+function adminAnnouncementCardHTML(
+  id,
+  data
+) {
+
+  const active =
+    data.active !== false;
+
+
+  return `
+
+    <div class="admin-announcement-card">
+
+      <div class="admin-card-header">
+
+        <div>
+
+          <h3>
+            📢
+            ${escapeHTML(
+              data.title ||
+              "Announcement"
+            )}
+          </h3>
+
+          ${
+            data.important === true
+              ? `<span class="status-important">IMPORTANT</span>`
+              : ""
+          }
+
+        </div>
+
+        <span
+          class="${
+            active
+              ? "status-active"
+              : "status-inactive"
+          }"
+        >
+          ${active ? "Active" : "Inactive"}
+        </span>
+
+      </div>
+
+
+      <p>
+        ${escapeHTML(
+          data.message ||
+          ""
+        )}
+      </p>
+
+
+      <small>
+        ${escapeHTML(
+          formatDate(
+            data.createdAt
+          )
+        )}
+      </small>
+
+
+      <div class="admin-action-row">
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.editAdminAnnouncement('${escapeHTML(id)}')"
+        >
+          ✏️ Edit
+        </button>
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.toggleAdminAnnouncement('${escapeHTML(id)}', ${active})"
+        >
+          ${active ? "Disable" : "Activate"}
+        </button>
+
+        <button
+          type="button"
+          class="admin-danger-btn"
+          onclick="window.deleteAdminAnnouncement('${escapeHTML(id)}')"
+        >
+          🗑️ Delete
+        </button>
+
+      </div>
+
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   ADD ANNOUNCEMENT
+========================================================= */
+
+window.addAdminAnnouncement =
+  async function () {
+
+    const title =
+      $("newAnnouncementTitle")
+        ?.value
+        ?.trim();
+
+
+    const message =
+      $("newAnnouncementMessage")
+        ?.value
+        ?.trim();
+
+
+    const active =
+      $("newAnnouncementActive")
+        ? $("newAnnouncementActive").checked !== false
+        : true;
+
+
+    const important =
+      $("newAnnouncementImportant")
+        ? $("newAnnouncementImportant").checked === true
+        : false;
+
+
+    if (!title || !message) {
+
+      return showMessage(
+        "adminAnnouncementMessage",
+        "Title and message are required.",
+        "error"
+      );
+    }
+
+
+    try {
+
+      await addDoc(
+        collection(
+          db,
+          "message"
+        ),
+        {
+          title,
+
+          message,
+
+          active,
+
+          important,
+
+          createdAt:
+            serverTimestamp(),
+
+          createdBy:
+            currentAdmin.uid,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      clearInputs(
+        "newAnnouncementTitle",
+        "newAnnouncementMessage"
+      );
+
+
+      showMessage(
+        "adminAnnouncementMessage",
+        "Announcement added successfully.",
+        "success"
+      );
+
+
+      await loadAdminAnnouncements();
+
+    } catch (error) {
+
+      console.error(
+        "Add announcement error:",
+        error
+      );
+
+      showMessage(
+        "adminAnnouncementMessage",
+        error?.message ||
+        "Failed to add announcement.",
+        "error"
+      );
+    }
+  };
+
+
+/* =========================================================
+   EDIT ANNOUNCEMENT
+========================================================= */
+
+window.editAdminAnnouncement =
+  async function (id) {
+
+    try {
+
+      const ref =
+        doc(
+          db,
+          "message",
+          id
+        );
+
+
+      const snap =
+        await getDoc(ref);
+
+
+      if (!snap.exists()) {
+        return alert(
+          "Announcement not found."
+        );
+      }
+
+
+      const data =
+        snap.data() || {};
+
+
+      const title =
+        prompt(
+          "Title:",
+          data.title || ""
+        );
+
+
+      if (title === null) {
+        return;
+      }
+
+
+      const message =
+        prompt(
+          "Message:",
+          data.message || ""
+        );
+
+
+      if (
+        message === null
+      ) {
+        return;
+      }
+
+
+      const important =
+        confirm(
+          "Should this announcement be marked IMPORTANT?"
+        );
+
+
+      await updateDoc(
+        ref,
+        {
+          title:
+            title.trim(),
+
+          message:
+            message.trim(),
+
+          important,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      await loadAdminAnnouncements();
+
+    } catch (error) {
+
+      console.error(
+        "Edit announcement error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to edit announcement."
+      );
+    }
+  };
+
+
+/* =========================================================
+   TOGGLE ANNOUNCEMENT
+========================================================= */
+
+window.toggleAdminAnnouncement =
+  async function (
+    id,
+    active
+  ) {
+
+    try {
+
+      await updateDoc(
+        doc(
+          db,
+          "message",
+          id
+        ),
+        {
+          active:
+            !active,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      await loadAdminAnnouncements();
+
+    } catch (error) {
+
+      console.error(
+        "Toggle announcement error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to update announcement."
+      );
+    }
+  };
+
+
+/* =========================================================
+   DELETE ANNOUNCEMENT
+========================================================= */
+
+window.deleteAdminAnnouncement =
+  async function (id) {
+
+    if (
+      !confirm(
+        "Delete this announcement?"
+      )
+    ) {
+      return;
+    }
+
+
+    try {
+
+      await deleteDoc(
+        doc(
+          db,
+          "message",
+          id
+        )
+      );
+
+
+      await loadAdminAnnouncements();
+
+    } catch (error) {
+
+      console.error(
+        "Delete announcement error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to delete announcement."
+      );
+    }
+  };
+
+
+/* =========================================================
+   CALENDAR DATA
+========================================================= */
+
 async function getAdminCalendarData() {
-  const snap = await getDoc(doc(db, "settings", "calendar"));
-  if (!snap.exists()) return { closed: false, closedDates: [], restDates: [] };
-  const data = snap.data();
+
+  const ref =
+    doc(
+      db,
+      "settings",
+      "calendar"
+    );
+
+
+  const snap =
+    await getDoc(ref);
+
+
+  if (!snap.exists()) {
+
+    return {
+      closed: false,
+      closedDates: [],
+      restDates: []
+    };
+  }
+
+
+  const data =
+    snap.data() || {};
+
+
+  const closedDates =
+    Array.isArray(
+      data.closedDates
+    )
+      ? data.closedDates
+      : [];
+
+
+  const restDates =
+    Array.isArray(
+      data.restDates
+    )
+      ? data.restDates
+      : [];
+
+
   return {
-    closed: data.closed === true,
-    closedDates: Array.isArray(data.closedDates) ? data.closedDates : [],
-    restDates: Array.isArray(data.restDates) ? data.restDates : []
+
+    closed:
+      data.closed === true ||
+      data.isClosed === true,
+
+    closedDates:
+      [...new Set(
+        closedDates
+          .map(String)
+      )],
+
+    restDates:
+      [...new Set(
+        restDates
+          .map(String)
+      )]
   };
 }
 
+
+/* =========================================================
+   LOAD CALENDAR
+========================================================= */
+
 async function loadAdminCalendar() {
-  const container = $("adminCalendarList");
-  if (!container) return;
-  container.innerHTML = loadingHTML("📅", "Loading Calendar...");
+
+  const container =
+    $("adminCalendarList");
+
+
+  if (!container) {
+    return;
+  }
+
+
+  container.innerHTML =
+    loadingHTML(
+      "📅",
+      "Loading Calendar..."
+    );
+
+
   try {
-    const data = await getAdminCalendarData();
-    renderAdminCalendar(data);
-  } catch { container.innerHTML = errorHTML("Failed to load calendar."); }
+
+    const data =
+      await getAdminCalendarData();
+
+
+    renderAdminCalendar(
+      data
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Load calendar error:",
+      error
+    );
+
+    container.innerHTML =
+      errorHTML(
+        error?.message
+      );
+  }
 }
 
-function renderAdminCalendar(data) {
-  const container = $("adminCalendarList");
-  if (!container) return;
 
-  const allDates = [
-    ...data.closedDates.map(date => ({ date, type: "closed" })),
-    ...data.restDates.map(date => ({ date, type: "rest" }))
-  ].sort((a, b) => a.date.localeCompare(b.date));
+/* =========================================================
+   RENDER CALENDAR
+========================================================= */
 
-  if (!allDates.length) {
-    container.innerHTML = emptyHTML("📅", "No Special Dates", "No rest or closed dates configured.");
-  } else {
-    container.innerHTML = allDates.map(item => `
-      <div class="admin-level-card">
-        <div><strong>📅 ${escapeHTML(item.date)}</strong><small>${item.type === "closed" ? "Closed" : "Rest Day"}</small></div>
-        <div class="admin-action-row">
-          <button type="button" class="admin-danger-btn" onclick="window.removeAdminCalendarDate('${escapeHTML(item.date)}', '${item.type}')">Remove</button>
+function renderAdminCalendar(
+  data
+) {
+
+  const container =
+    $("adminCalendarList");
+
+
+  if (!container) {
+    return;
+  }
+
+
+  const globalClosed =
+    $("adminCalendarGlobalClosed");
+
+
+  if (globalClosed) {
+
+    if (
+      globalClosed.type ===
+      "checkbox"
+    ) {
+
+      globalClosed.checked =
+        data.closed === true;
+    }
+  }
+
+
+  const dates = [];
+
+
+  data.closedDates.forEach(
+    date => {
+
+      dates.push({
+        date,
+        type:
+          "Closed"
+      });
+    }
+  );
+
+
+  data.restDates.forEach(
+    date => {
+
+      dates.push({
+        date,
+        type:
+          "Rest"
+      });
+    }
+  );
+
+
+  dates.sort(
+    (a, b) =>
+      a.date.localeCompare(
+        b.date
+      )
+  );
+
+
+  if (!dates.length) {
+
+    container.innerHTML =
+      emptyHTML(
+        "📅",
+        "No Special Dates"
+      );
+
+    return;
+  }
+
+
+  container.innerHTML =
+    dates
+      .map(
+        item => `
+
+          <div class="admin-calendar-item">
+
+            <div>
+
+              <strong>
+                ${escapeHTML(item.date)}
+              </strong>
+
+              <span>
+                ${escapeHTML(item.type)}
+              </span>
+
+            </div>
+
+            <button
+              type="button"
+              class="admin-danger-btn"
+              onclick="window.removeAdminCalendarDate('${escapeHTML(item.date)}')"
+            >
+              🗑️ Remove
+            </button>
+
+          </div>
+
+        `
+      )
+      .join("");
+}
+
+
+/* =========================================================
+   SAVE CALENDAR
+========================================================= */
+
+async function saveAdminCalendarData(
+  data
+) {
+
+  const closedDates =
+    [...new Set(
+      (data.closedDates || [])
+        .map(String)
+    )];
+
+
+  const restDates =
+    [...new Set(
+      (data.restDates || [])
+        .map(String)
+    )];
+
+
+  /*
+     Same date cannot be both
+     Closed and Rest.
+  */
+
+  const cleanRestDates =
+    restDates.filter(
+      date =>
+        !closedDates.includes(
+          date
+        )
+    );
+
+
+  await setDoc(
+    doc(
+      db,
+      "settings",
+      "calendar"
+    ),
+    {
+      closed:
+        data.closed === true,
+
+      isClosed:
+        data.closed === true,
+
+      closedDates,
+
+      restDates:
+        cleanRestDates,
+
+      updatedAt:
+        serverTimestamp(),
+
+      updatedBy:
+        currentAdmin.uid
+    },
+    {
+      merge: true
+    }
+  );
+}
+
+
+/* =========================================================
+   ADD REST DATE
+========================================================= */
+
+window.addAdminRestDate =
+  async function () {
+
+    const date =
+      $("newCalendarDate")
+        ?.value
+        ?.trim();
+
+
+    if (!date) {
+
+      return showMessage(
+        "adminCalendarMessage",
+        "Please select a date.",
+        "error"
+      );
+    }
+
+
+    try {
+
+      const data =
+        await getAdminCalendarData();
+
+
+      data.restDates.push(
+        date
+      );
+
+
+      data.closedDates =
+        data.closedDates.filter(
+          item =>
+            item !== date
+        );
+
+
+      await saveAdminCalendarData(
+        data
+      );
+
+
+      showMessage(
+        "adminCalendarMessage",
+        "Rest date saved.",
+        "success"
+      );
+
+
+      await loadAdminCalendar();
+
+    } catch (error) {
+
+      console.error(
+        "Add rest date error:",
+        error
+      );
+
+      showMessage(
+        "adminCalendarMessage",
+        error?.message ||
+        "Failed to save rest date.",
+        "error"
+      );
+    }
+  };
+
+
+/* =========================================================
+   ADD CLOSED DATE
+========================================================= */
+
+window.addAdminClosedDate =
+  async function () {
+
+    const date =
+      $("newCalendarDate")
+        ?.value
+        ?.trim();
+
+
+    if (!date) {
+
+      return showMessage(
+        "adminCalendarMessage",
+        "Please select a date.",
+        "error"
+      );
+    }
+
+
+    try {
+
+      const data =
+        await getAdminCalendarData();
+
+
+      data.closedDates.push(
+        date
+      );
+
+
+      data.restDates =
+        data.restDates.filter(
+          item =>
+            item !== date
+        );
+
+
+      await saveAdminCalendarData(
+        data
+      );
+
+
+      showMessage(
+        "adminCalendarMessage",
+        "Closed date saved.",
+        "success"
+      );
+
+
+      await loadAdminCalendar();
+
+    } catch (error) {
+
+      console.error(
+        "Add closed date error:",
+        error
+      );
+
+      showMessage(
+        "adminCalendarMessage",
+        error?.message ||
+        "Failed to save closed date.",
+        "error"
+      );
+    }
+  };
+
+
+/* =========================================================
+   REMOVE CALENDAR DATE
+========================================================= */
+
+window.removeAdminCalendarDate =
+  async function (date) {
+
+    try {
+
+      const data =
+        await getAdminCalendarData();
+
+
+      data.closedDates =
+        data.closedDates.filter(
+          item =>
+            item !== date
+        );
+
+
+      data.restDates =
+        data.restDates.filter(
+          item =>
+            item !== date
+        );
+
+
+      await saveAdminCalendarData(
+        data
+      );
+
+
+      await loadAdminCalendar();
+
+    } catch (error) {
+
+      console.error(
+        "Remove calendar date error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to remove calendar date."
+      );
+    }
+  };
+
+
+/* =========================================================
+   COMPATIBILITY ALIAS
+========================================================= */
+
+window.removeAdminCalendarDate =
+  window.removeAdminCalendarDate;
+
+
+/* =========================================================
+   TOGGLE GLOBAL CALENDAR
+========================================================= */
+
+window.toggleGlobalCalendarClosed =
+  async function () {
+
+    try {
+
+      const data =
+        await getAdminCalendarData();
+
+
+      data.closed =
+        !data.closed;
+
+
+      await saveAdminCalendarData(
+        data
+      );
+
+
+      showMessage(
+        "adminCalendarMessage",
+        data.closed
+          ? "Calendar globally closed."
+          : "Calendar globally opened.",
+        "success"
+      );
+
+
+      await loadAdminCalendar();
+
+    } catch (error) {
+
+      console.error(
+        "Toggle global calendar error:",
+        error
+      );
+
+      showMessage(
+        "adminCalendarMessage",
+        error?.message ||
+        "Failed to update calendar.",
+        "error"
+      );
+    }
+  };
+
+
+/* =========================================================
+   INCOME LEVELS
+========================================================= */
+
+async function loadAdminIncomeLevels() {
+
+  ensureAdminIncomeLevelsSection();
+
+
+  const container =
+    $("adminIncomeLevelsList");
+
+
+  if (!container) {
+
+    console.error(
+      "adminIncomeLevelsList NOT FOUND"
+    );
+
+    return;
+  }
+
+
+  container.innerHTML =
+    loadingHTML(
+      "📊",
+      "Loading Income Levels..."
+    );
+
+
+  try {
+
+    const snapshot =
+      await getDocs(
+        collection(
+          db,
+          "incomeLevels"
+        )
+      );
+
+
+    incomeLevelsCache =
+      snapshot.docs
+        .map(
+          docSnap => ({
+            id:
+              docSnap.id,
+
+            ...(docSnap.data() || {})
+          })
+        )
+        .sort(
+          (a, b) =>
+            safeNumber(a.level) -
+            safeNumber(b.level)
+        );
+
+
+    if (
+      incomeLevelsCache.length === 0
+    ) {
+
+      container.innerHTML =
+        emptyHTML(
+          "📊",
+          "No Income Levels",
+          "Click + Add Income Level."
+        );
+
+      return;
+    }
+
+
+    container.innerHTML =
+      incomeLevelsCache
+        .map(
+          level =>
+            incomeLevelCardHTML(
+              level.id,
+              level
+            )
+        )
+        .join("");
+
+  } catch (error) {
+
+    console.error(
+      "Load income levels error:",
+      error
+    );
+
+    container.innerHTML =
+      errorHTML(
+        error?.message ||
+        "Failed to load Income Levels."
+      );
+  }
+}
+
+
+/* =========================================================
+   INCOME LEVEL CARD
+========================================================= */
+
+function incomeLevelCardHTML(
+  id,
+  level
+) {
+
+  const levelNumber =
+    safeNumber(
+      level.level
+    );
+
+
+  const price =
+    safeNumber(
+      level.price
+    );
+
+
+  const daily =
+    safeNumber(
+      level.daily
+    );
+
+
+  const monthly =
+    safeNumber(
+      level.monthly
+    );
+
+
+  const yearly =
+    safeNumber(
+      level.yearly
+    );
+
+
+  const active =
+    level.active !== false;
+
+
+  return `
+
+    <div class="admin-level-card">
+
+      <div class="income-level-header">
+
+        <div>
+
+          <h3>
+            📊 Income Level
+            ${levelNumber}
+          </h3>
+
+          <span
+            class="${
+              active
+                ? "status-active"
+                : "status-inactive"
+            }"
+          >
+            ${
+              active
+                ? "Active"
+                : "Inactive"
+            }
+          </span>
+
         </div>
-      </div>`).join("");
-  }
 
-  setElementText("adminCalendarStatus", data.closed ? "🔴 Calendar CLOSED" : "🟢 Calendar OPEN");
-  if ($("toggleGlobalCalendarButton")) {
-    $("toggleGlobalCalendarButton").textContent = data.closed ? "Open Calendar" : "Close Calendar";
-  }
-}
 
-async function saveAdminCalendarData(data) {
-  await setDoc(doc(db, "settings", "calendar"), {
-    closed: data.closed === true, closedDates: data.closedDates, restDates: data.restDates,
-    updatedAt: serverTimestamp(), updatedBy: currentAdmin?.uid || null
-  }, { merge: true });
-}
+        <div class="income-level-price">
 
-window.addAdminRestDate = async function () {
-  const date = $("newCalendarDate")?.value.trim();
-  if (!date) return showMessage("adminCalendarMessage", "Select a date.", "error");
-  try {
-    const data = await getAdminCalendarData();
-    data.closedDates = data.closedDates.filter(d => d !== date);
-    if (!data.restDates.includes(date)) data.restDates.push(date);
-    await saveAdminCalendarData(data);
-    renderAdminCalendar(data);
-    showMessage("adminCalendarMessage", `${date} added as Rest Day.`, "success");
-  } catch (err) { showMessage("adminCalendarMessage", err.message, "error"); }
-};
+          ETB
+          ${formatAdminMoney(price)}
 
-window.addAdminClosedDate = async function () {
-  const date = $("newCalendarDate")?.value.trim();
-  if (!date) return showMessage("adminCalendarMessage", "Select a date.", "error");
-  try {
-    const data = await getAdminCalendarData();
-    data.restDates = data.restDates.filter(d => d !== date);
-    if (!data.closedDates.includes(date)) data.closedDates.push(date);
-    await saveAdminCalendarData(data);
-    renderAdminCalendar(data);
-    showMessage("adminCalendarMessage", `${date} added as Closed.`, "success");
-  } catch (err) { showMessage("adminCalendarMessage", err.message, "error"); }
-};
-
-window.removeAdminCalendarDate = async function (date, type) {
-  if (!confirm(`Remove ${date}?`)) return;
-  try {
-    const data = await getAdminCalendarData();
-    if (type === "closed") data.closedDates = data.closedDates.filter(d => d !== date);
-    else data.restDates = data.restDates.filter(d => d !== date);
-    await saveAdminCalendarData(data);
-    renderAdminCalendar(data);
-  } catch (err) { showMessage("adminCalendarMessage", err.message, "error"); }
-};
-
-window.toggleGlobalCalendarClosed = async function () {
-  try {
-    const data = await getAdminCalendarData();
-    data.closed = !data.closed;
-    await saveAdminCalendarData(data);
-    renderAdminCalendar(data);
-  } catch (err) { showMessage("adminCalendarMessage", err.message, "error"); }
-};
-
-/* DOM FALLBACKS */
-function ensureAdminAnnouncementCalendarSections() {
-  const parent = $("adminDashboardPage") || document.body;
-
-  if (!$("adminAnnouncementsSection")) {
-    const section = document.createElement("section");
-    section.id = "adminAnnouncementsSection";
-    section.className = "admin-section hidden";
-    section.innerHTML = `
-      <div class="admin-section-header"><h2>📢 Announcements</h2></div>
-      <div class="admin-form-card">
-        <input type="text" id="newAnnouncementTitle" placeholder="Title" />
-        <textarea id="newAnnouncementMessage" rows="3" placeholder="Message"></textarea>
-        <select id="newAnnouncementActive"><option value="true">Active</option><option value="false">Disabled</option></select>
-        <select id="newAnnouncementImportant"><option value="false">Normal</option><option value="true">Important</option></select>
-        <button type="button" class="admin-primary-btn" onclick="window.addAdminAnnouncement()">Publish</button>
-        <div id="adminAnnouncementMessage" class="admin-message"></div>
-      </div>
-      <div id="adminAnnouncementsList" class="admin-list"></div>`;
-    parent.appendChild(section);
-  }
-
-  if (!$("adminCalendarSection")) {
-    const section = document.createElement("section");
-    section.id = "adminCalendarSection";
-    section.className = "admin-section hidden";
-    section.innerHTML = `
-      <div class="admin-section-header"><h2>📅 Calendar Control</h2></div>
-      <div class="admin-form-card">
-        <div id="adminCalendarStatus" class="admin-message">Loading...</div>
-        <button type="button" id="toggleGlobalCalendarButton" class="admin-secondary-btn" onclick="window.toggleGlobalCalendarClosed()">Toggle Calendar</button>
-      </div>
-      <div class="admin-form-card">
-        <input type="date" id="newCalendarDate" />
-        <div class="admin-action-row">
-          <button type="button" class="admin-primary-btn" onclick="window.addAdminRestDate()">Add Rest Day</button>
-          <button type="button" class="admin-danger-btn" onclick="window.addAdminClosedDate()">Add Closed Date</button>
         </div>
-        <div id="adminCalendarMessage" class="admin-message"></div>
+
       </div>
-      <div id="adminCalendarList" class="admin-list"></div>`;
-    parent.appendChild(section);
+
+
+      <div class="income-level-details">
+
+        <div>
+          <small>Daily</small>
+          <strong>
+            ETB
+            ${formatAdminMoney(daily)}
+          </strong>
+        </div>
+
+        <div>
+          <small>Monthly</small>
+          <strong>
+            ETB
+            ${formatAdminMoney(monthly)}
+          </strong>
+        </div>
+
+        <div>
+          <small>Yearly</small>
+          <strong>
+            ETB
+            ${formatAdminMoney(yearly)}
+          </strong>
+        </div>
+
+      </div>
+
+
+      <div class="admin-action-row">
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.editAdminIncomeLevel('${escapeHTML(id)}')"
+        >
+          ✏️ Edit
+        </button>
+
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.toggleAdminIncomeLevel('${escapeHTML(id)}', ${active})"
+        >
+          ${
+            active
+              ? "Disable"
+              : "Activate"
+          }
+        </button>
+
+
+        <button
+          type="button"
+          class="admin-danger-btn"
+          onclick="window.deleteAdminIncomeLevel('${escapeHTML(id)}')"
+        >
+          🗑️ Delete
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+}
+
+
+/* =========================================================
+   OPEN INCOME FORM
+========================================================= */
+
+window.openAdminIncomeLevelForm =
+  function (
+    levelId = ""
+  ) {
+
+    const existing =
+      incomeLevelsCache.find(
+        item =>
+          String(item.id) ===
+          String(levelId)
+      );
+
+
+    const level =
+      existing || {
+
+        level: "",
+
+        price: "",
+
+        daily: "",
+
+        monthly: "",
+
+        yearly: "",
+
+        active: true
+      };
+
+
+    const formContainer =
+      $("adminIncomeLevelForm");
+
+
+    if (!formContainer) {
+
+      console.error(
+        "adminIncomeLevelForm NOT FOUND"
+      );
+
+      return;
+    }
+
+
+    formContainer.innerHTML = `
+
+      <div class="income-form-box admin-form-card">
+
+        <h3>
+          ${
+            existing
+              ? "Edit Income Level"
+              : "Add Income Level"
+          }
+        </h3>
+
+
+        <div class="admin-form-grid">
+
+          <label>
+            Level
+
+            <input
+              type="number"
+              id="incomeLevelNumber"
+              min="1"
+              step="1"
+              value="${escapeHTML(
+                level.level
+              )}"
+            >
+          </label>
+
+
+          <label>
+            Price (ETB)
+
+            <input
+              type="number"
+              id="incomeLevelPrice"
+              min="0"
+              step="0.01"
+              value="${escapeHTML(
+                level.price
+              )}"
+            >
+          </label>
+
+
+          <label>
+            Daily Income (ETB)
+
+            <input
+              type="number"
+              id="incomeLevelDaily"
+              min="0"
+              step="0.01"
+              value="${escapeHTML(
+                level.daily
+              )}"
+            >
+          </label>
+
+
+          <label>
+            Monthly Income (ETB)
+
+            <input
+              type="number"
+              id="incomeLevelMonthly"
+              min="0"
+              step="0.01"
+              value="${escapeHTML(
+                level.monthly
+              )}"
+            >
+          </label>
+
+
+          <label>
+            Yearly Income (ETB)
+
+            <input
+              type="number"
+              id="incomeLevelYearly"
+              min="0"
+              step="0.01"
+              value="${escapeHTML(
+                level.yearly
+              )}"
+            >
+          </label>
+
+
+          <label>
+            Status
+
+            <select
+              id="incomeLevelActive"
+            >
+
+              <option
+                value="true"
+                ${
+                  level.active !== false
+                    ? "selected"
+                    : ""
+                }
+              >
+                Active
+              </option>
+
+              <option
+                value="false"
+                ${
+                  level.active === false
+                    ? "selected"
+                    : ""
+                }
+              >
+                Inactive
+              </option>
+
+            </select>
+
+          </label>
+
+        </div>
+
+
+        <div
+          class="income-form-actions admin-action-row"
+        >
+
+          <button
+            type="button"
+            class="admin-primary-btn"
+            onclick="window.saveAdminIncomeLevel('${existing ? encodeURIComponent(existing.id) : ""}')"
+          >
+            💾 Save
+          </button>
+
+
+          <button
+            type="button"
+            class="admin-secondary-btn"
+            onclick="window.closeAdminIncomeLevelForm()"
+          >
+            Cancel
+          </button>
+
+        </div>
+
+
+        <div
+          id="incomeLevelFormMessage"
+          class="admin-message"
+        ></div>
+
+      </div>
+
+    `;
+
+
+    formContainer.classList.remove(
+      "hidden"
+    );
+
+    formContainer.hidden = false;
+  };
+
+
+/* =========================================================
+   CLOSE INCOME FORM
+========================================================= */
+
+window.closeAdminIncomeLevelForm =
+  function () {
+
+    const container =
+      $("adminIncomeLevelForm");
+
+
+    if (!container) {
+      return;
+    }
+
+
+    container.innerHTML = "";
+
+    container.classList.add(
+      "hidden"
+    );
+
+    container.hidden = true;
+  };
+
+
+/* =========================================================
+   SAVE INCOME LEVEL
+========================================================= */
+
+window.saveAdminIncomeLevel =
+  async function (
+    encodedId = ""
+  ) {
+
+    if (!currentAdmin) {
+
+      return showMessage(
+        "incomeLevelFormMessage",
+        "Admin session not found.",
+        "error"
+      );
+    }
+
+
+    const level =
+      Math.floor(
+        safeNumber(
+          $("incomeLevelNumber")
+            ?.value
+        )
+      );
+
+
+    const price =
+      safeNumber(
+        $("incomeLevelPrice")
+          ?.value
+      );
+
+
+    const daily =
+      safeNumber(
+        $("incomeLevelDaily")
+          ?.value
+      );
+
+
+    const monthly =
+      safeNumber(
+        $("incomeLevelMonthly")
+          ?.value
+      );
+
+
+    const yearly =
+      safeNumber(
+        $("incomeLevelYearly")
+          ?.value
+      );
+
+
+    const active =
+      $("incomeLevelActive")
+        ? $("incomeLevelActive").value !== "false"
+        : true;
+
+
+    if (
+      level < 1
+    ) {
+
+      return showMessage(
+        "incomeLevelFormMessage",
+        "Income Level must be at least 1.",
+        "error"
+      );
+    }
+
+
+    if (
+      price < 0 ||
+      daily < 0 ||
+      monthly < 0 ||
+      yearly < 0
+    ) {
+
+      return showMessage(
+        "incomeLevelFormMessage",
+        "Income values cannot be negative.",
+        "error"
+      );
+    }
+
+
+    const decodedId =
+      encodedId
+        ? decodeURIComponent(
+            encodedId
+          )
+        : "";
+
+
+    const duplicate =
+      incomeLevelsCache.find(
+        item =>
+          Number(item.level) ===
+            level &&
+          String(item.id) !==
+            String(decodedId)
+      );
+
+
+    if (duplicate) {
+
+      return showMessage(
+        "incomeLevelFormMessage",
+        `Income Level ${level} already exists.`,
+        "error"
+      );
+    }
+
+
+    const incomeData = {
+
+      level,
+
+      price,
+
+      daily,
+
+      monthly,
+
+      yearly,
+
+      active,
+
+      updatedAt:
+        serverTimestamp(),
+
+      updatedBy:
+        currentAdmin.uid
+    };
+
+
+    try {
+
+      if (decodedId) {
+
+        await updateDoc(
+          doc(
+            db,
+            "incomeLevels",
+            decodedId
+          ),
+          incomeData
+        );
+
+
+        showMessage(
+          "incomeLevelFormMessage",
+          "Income Level updated successfully.",
+          "success"
+        );
+
+      } else {
+
+        await addDoc(
+          collection(
+            db,
+            "incomeLevels"
+          ),
+          {
+            ...incomeData,
+
+            createdAt:
+              serverTimestamp(),
+
+            createdBy:
+              currentAdmin.uid
+          }
+        );
+
+
+        showMessage(
+          "incomeLevelFormMessage",
+          "Income Level added successfully.",
+          "success"
+        );
+      }
+
+
+      setTimeout(
+        async () => {
+
+          window.closeAdminIncomeLevelForm();
+
+          await loadAdminIncomeLevels();
+
+        },
+        400
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Save income level error:",
+        error
+      );
+
+      showMessage(
+        "incomeLevelFormMessage",
+        error?.message ||
+        "Failed to save Income Level.",
+        "error"
+      );
+    }
+  };
+
+
+/* =========================================================
+   OLD INCOME COMPATIBILITY
+========================================================= */
+
+window.saveIncomeLevel =
+  function (
+    levelId = ""
+  ) {
+
+    return window.saveAdminIncomeLevel(
+      levelId
+    );
+  };
+
+
+/* =========================================================
+   EDIT INCOME LEVEL
+========================================================= */
+
+window.editAdminIncomeLevel =
+  function (id) {
+
+    if (!id) {
+
+      return alert(
+        "Income Level ID is missing."
+      );
+    }
+
+
+    window.openAdminIncomeLevelForm(
+      id
+    );
+  };
+
+
+/* =========================================================
+   TOGGLE INCOME LEVEL
+========================================================= */
+
+window.toggleAdminIncomeLevel =
+  async function (
+    id,
+    active
+  ) {
+
+    if (!currentAdmin) {
+
+      return alert(
+        "Admin session not found."
+      );
+    }
+
+
+    if (!id) {
+
+      return alert(
+        "Income Level ID is missing."
+      );
+    }
+
+
+    try {
+
+      await updateDoc(
+        doc(
+          db,
+          "incomeLevels",
+          id
+        ),
+        {
+          active:
+            !active,
+
+          updatedAt:
+            serverTimestamp(),
+
+          updatedBy:
+            currentAdmin.uid
+        }
+      );
+
+
+      await loadAdminIncomeLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Toggle income level error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to update Income Level."
+      );
+    }
+  };
+
+
+/* =========================================================
+   DELETE INCOME LEVEL
+========================================================= */
+
+window.deleteAdminIncomeLevel =
+  async function (id) {
+
+    if (!currentAdmin) {
+
+      return alert(
+        "Admin session not found."
+      );
+    }
+
+
+    if (!id) {
+
+      return alert(
+        "Income Level ID is missing."
+      );
+    }
+
+
+    if (
+      !confirm(
+        "Are you sure you want to delete this Income Level?"
+      )
+    ) {
+      return;
+    }
+
+
+    try {
+
+      await deleteDoc(
+        doc(
+          db,
+          "incomeLevels",
+          id
+        )
+      );
+
+
+      await loadAdminIncomeLevels();
+
+    } catch (error) {
+
+      console.error(
+        "Delete income level error:",
+        error
+      );
+
+      alert(
+        error?.message ||
+        "Failed to delete Income Level."
+      );
+    }
+  };
+
+
+/* =========================================================
+   ANNOUNCEMENT + CALENDAR CHECK
+========================================================= */
+
+window.ensureAdminAnnouncementCalendarSections =
+  function () {
+
+    const announcementSection =
+      $("adminAnnouncementsSection");
+
+
+    const calendarSection =
+      $("adminCalendarSection");
+
+
+    if (!announcementSection) {
+
+      console.warn(
+        "adminAnnouncementsSection not found in HTML."
+      );
+    }
+
+
+    if (!calendarSection) {
+
+      console.warn(
+        "adminCalendarSection not found in HTML."
+      );
+    }
+  };
+
+
+/* =========================================================
+   ADMIN LOGIN
+========================================================= */
+
+window.adminLogin = async function () {
+
+  const email =
+    $("adminEmail")?.value?.trim() || "";
+
+  const password =
+    $("adminPassword")?.value || "";
+
+  const messageEl =
+    $("adminLoginMessage");
+
+  const button =
+    $("adminLoginButton");
+
+  if (!email || !password) {
+
+    showMessage(
+      "adminLoginMessage",
+      "Please enter email and password.",
+      "error"
+    );
+
+    return;
   }
-}
 
-function ensureAdminGTeamDepositSection() {
-  const parent = $("adminDashboardPage") || document.body;
-  if ($("adminGTeamDepositLevelsSection")) return;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Logging in...";
+  }
 
-  const section = document.createElement("section");
-  section.id = "adminGTeamDepositLevelsSection";
-  section.className = "admin-section hidden";
-  section.innerHTML = `
-    <div class="admin-section-header">
-      <h2>👥 G Team Deposit Levels</h2>
-      <p>Deposit levels and fixed team commission settings.</p>
-    </div>
-    <div class="admin-form-card">
-      <h3>Add G Team Deposit Level</h3>
-      <input type="text" id="gTeamDepositName" placeholder="Level Name" />
-      <input type="number" id="gTeamDepositAmount" placeholder="Deposit Amount" min="1" />
-      <input type="number" id="gTeamDepositCommission" placeholder="Fixed Team Commission" min="0" />
-      <input type="number" id="gTeamDepositTaskLimit" placeholder="Task Limit" min="1" value="1" />
-      <input type="number" id="gTeamDepositOrder" placeholder="Order" min="1" />
-      <button type="button" class="admin-primary-btn" onclick="window.addGTeamDepositLevel()">Add Deposit Level</button>
-      <div id="gTeamDepositMessage" class="admin-message"></div>
-    </div>
-    <div id="adminGTeamDepositLevelsList" class="admin-list"></div>`;
-  parent.appendChild(section);
-}
+  try {
 
-/* GENERIC UI BUILDERS */
-function loadingHTML(icon, title) {
-  return `<div class="admin-empty"><div>${escapeHTML(icon)}</div><h3>${escapeHTML(title)}</h3><p>Please wait...</p></div>`;
-}
-function emptyHTML(icon, title, desc) {
-  return `<div class="admin-empty"><div>${escapeHTML(icon)}</div><h3>${escapeHTML(title)}</h3><p>${escapeHTML(desc)}</p></div>`;
-}
-function errorHTML(message) {
-  return `<div class="admin-empty"><div>⚠️</div><h3>Error</h3><p>${escapeHTML(message)}</p></div>`;
-}
+    const credential =
+      await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
 
-/* INIT */
-ensureAdminAnnouncementCalendarSections();
-ensureAdminGTeamDepositSection();
-window.addEventListener("beforeunload", stopAllListeners);
+    const user =
+      credential.user;
 
-console.log("CCUS Admin Panel loaded successfully.");
+    /* -----------------------------------------
+       CHECK ADMIN PERMISSION
+    ----------------------------------------- */
+
+    const allowed =
+      await requireAdmin(user);
+
+    if (!allowed) {
+
+      await signOut(auth);
+
+      throw new Error(
+        "This account does not have admin permission."
+      );
+    }
+
+    currentAdmin = user;
+
+    console.log(
+      "✅ Admin login successful:",
+      user.uid
+    );
+
+    showMessage(
+      "adminLoginMessage",
+      "Admin login successful.",
+      "success"
+    );
+
+    /* -----------------------------------------
+       SHOW ADMIN DASHBOARD
+    ----------------------------------------- */
+
+    const loginPage =
+      $("adminLoginPage");
+
+    const dashboardPage =
+      $("adminDashboardPage");
+
+    if (loginPage) {
+      loginPage.hidden = true;
+      loginPage.classList.add("hidden");
+    }
+
+    if (dashboardPage) {
+      dashboardPage.hidden = false;
+      dashboardPage.classList.remove("hidden");
+    }
+
+    /* -----------------------------------------
+       LOAD DASHBOARD
+    ----------------------------------------- */
+
+    await loadDashboard();
+
+  } catch (error) {
+
+    console.error(
+      "❌ Admin login error:",
+      error
+    );
+
+    let message =
+      "Admin login failed.";
+
+    if (error?.code === "auth/invalid-credential") {
+      message =
+        "Email or password is incorrect.";
+    }
+
+    else if (
+      error?.code === "auth/invalid-email"
+    ) {
+      message =
+        "Invalid email address.";
+    }
+
+    else if (
+      error?.code === "auth/user-not-found"
+    ) {
+      message =
+        "Admin account was not found.";
+    }
+
+    else if (
+      error?.code === "auth/wrong-password"
+    ) {
+      message =
+        "Incorrect password.";
+    }
+
+    else if (
+      error?.code === "auth/too-many-requests"
+    ) {
+      message =
+        "Too many login attempts. Please try again later.";
+    }
+
+    else if (
+      error?.message
+    ) {
+      message =
+        error.message;
+    }
+
+    showMessage(
+      "adminLoginMessage",
+      message,
+      "error"
+    );
+
+  } finally {
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Login";
+    }
+  }
+};
+
+
+/* =========================================================
+   ADMIN LOGOUT
+========================================================= */
+
+window.adminLogout = async function () {
+
+  try {
+
+    stopAllListeners();
+
+    await signOut(auth);
+
+    currentAdmin = null;
+
+    const dashboardPage =
+      $("adminDashboardPage");
+
+    const loginPage =
+      $("adminLoginPage");
+
+    if (dashboardPage) {
+      dashboardPage.hidden = true;
+      dashboardPage.classList.add("hidden");
+    }
+
+    if (loginPage) {
+      loginPage.hidden = false;
+      loginPage.classList.remove("hidden");
+    }
+
+    const email =
+      $("adminEmail");
+
+    const password =
+      $("adminPassword");
+
+    if (email) {
+      email.value = "";
+    }
+
+    if (password) {
+      password.value = "";
+    }
+
+    console.log(
+      "✅ Admin logged out."
+    );
+
+  } catch (error) {
+
+    console.error(
+      "❌ Admin logout error:",
+      error
+    );
+
+    alert(
+      error?.message ||
+      "Logout failed."
+    );
+  }
+};
+
+
+/* =========================================================
+   AUTH STATE
+========================================================= */
+
+onAuthStateChanged(
+  auth,
+  async user => {
+
+    try {
+
+      /* -----------------------------------------
+         NO USER
+      ----------------------------------------- */
+
+      if (!user) {
+
+        currentAdmin = null;
+
+        stopAllListeners();
+
+        const dashboardPage =
+          $("adminDashboardPage");
+
+        const loginPage =
+          $("adminLoginPage");
+
+        if (dashboardPage) {
+          dashboardPage.hidden = true;
+          dashboardPage.classList.add("hidden");
+        }
+
+        if (loginPage) {
+          loginPage.hidden = false;
+          loginPage.classList.remove("hidden");
+        }
+
+        return;
+      }
+
+
+      /* -----------------------------------------
+         CHECK ADMIN
+      ----------------------------------------- */
+
+      const allowed =
+        await requireAdmin(user);
+
+      if (!allowed) {
+
+        console.warn(
+          "⚠️ Authenticated user is not an admin."
+        );
+
+        currentAdmin = null;
+
+        stopAllListeners();
+
+        await signOut(auth);
+
+        const dashboardPage =
+          $("adminDashboardPage");
+
+        const loginPage =
+          $("adminLoginPage");
+
+        if (dashboardPage) {
+          dashboardPage.hidden = true;
+          dashboardPage.classList.add("hidden");
+        }
+
+        if (loginPage) {
+          loginPage.hidden = false;
+          loginPage.classList.remove("hidden");
+        }
+
+        showMessage(
+          "adminLoginMessage",
+          "This account does not have admin permission.",
+          "error"
+        );
+
+        return;
+      }
+
+
+      /* -----------------------------------------
+         ADMIN AUTHENTICATED
+      ----------------------------------------- */
+
+      currentAdmin = user;
+
+      console.log(
+        "✅ Admin authenticated:",
+        user.uid
+      );
+
+      const loginPage =
+        $("adminLoginPage");
+
+      const dashboardPage =
+        $("adminDashboardPage");
+
+      if (loginPage) {
+        loginPage.hidden = true;
+        loginPage.classList.add("hidden");
+      }
+
+      if (dashboardPage) {
+        dashboardPage.hidden = false;
+        dashboardPage.classList.remove("hidden");
+      }
+
+      await loadDashboard();
+
+      console.log(
+        "✅ CCUS Admin dashboard ready."
+      );
+
+    } catch (error) {
+
+      console.error(
+        "❌ Admin auth state error:",
+        error
+      );
+
+      currentAdmin = null;
+    }
+  }
+);
+
+
+/* =========================================================
+   LOGIN FORM ENTER SUPPORT
+========================================================= */
+
+document.addEventListener(
+  "DOMContentLoaded",
+  () => {
+
+    const loginForm =
+      $("adminLoginForm");
+
+    if (
+      loginForm &&
+      !loginForm.dataset.listenerAttached
+    ) {
+
+      loginForm.addEventListener(
+        "submit",
+        event => {
+
+          event.preventDefault();
+
+          window.adminLogin();
+        }
+      );
+
+      loginForm.dataset.listenerAttached =
+        "true";
+    }
+
+    console.log(
+      "CCUS admin DOM ready."
+    );
+  }
+);
+
+/* =========================================================
+   INITIAL GLOBAL LOG
+========================================================= */
+
+console.log(
+  "CCUS admin.js loaded successfully."
+);
+
+console.log(
+  "📦 Firebase project: ccus-6900f"
+);
+
+console.log(
+  "🔐 Admin authentication enabled."
+);
+
+console.log(
+  "📌 Recharge collection: rechargeRequests"
+);
+
+console.log(
+  "📌 Withdraw collection: withdrawRequests"
+);
+
+console.log(
+  "📌 Task collection: tasks"
+);
+
+console.log(
+  "📌 Announcement collection: message"
+);
+
+console.log(
+  "📌 Calendar: settings/calendar"
+);
+
+console.log(
+  "📌 Income levels: incomeLevels"
+);
+
+console.log(
+  "📌 VIP levels: vip_levels"
+);
+
+console.log(
+  "📌 Team Deposit Levels: rechargeLevels"
+);
+
+console.log(
+  "🔒 Recharge approval updates TOTAL RECHARGE ONLY."
+);
+
+console.log(
+  "🔒 Withdrawal rejection refunds only once."
+);
+
+console.log(
+  "✅ CCUS admin.js initialized successfully."
+);
