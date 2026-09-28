@@ -730,12 +730,192 @@ const signupUser = async () => {
     );
   }
 };
+/* =========================================================
+CCUS LOGIN
+GLOBAL FUNCTION
+========================================================= */
 
-/* Explicit Window Binding for HTML standard onclick handlers */
-window.loginUser = loginUser;
-window.logoutUser = logoutUser;
-window.forgotPassword = forgotPassword;
-window.signupUser = signupUser;
+window.loginUser = async function () {
+
+  const emailInput =
+    document.getElementById("loginEmail");
+
+  const passwordInput =
+    document.getElementById("loginPassword");
+
+  const messageElement =
+    document.getElementById("loginMessage");
+
+  if (!emailInput || !passwordInput) {
+
+    console.error(
+      "❌ Login inputs not found."
+    );
+
+    return;
+  }
+
+
+  const email =
+    String(
+      emailInput.value || ""
+    ).trim();
+
+  const password =
+    String(
+      passwordInput.value || ""
+    );
+
+
+  if (!email) {
+
+    if (messageElement) {
+      messageElement.textContent =
+        "Email galchi.";
+    }
+
+    return;
+  }
+
+
+  if (!password) {
+
+    if (messageElement) {
+      messageElement.textContent =
+        "Password galchi.";
+    }
+
+    return;
+  }
+
+
+  try {
+
+    if (
+      typeof signInWithEmailAndPassword !==
+      "function"
+    ) {
+
+      throw new Error(
+        "Firebase Authentication hin qophaa'in."
+      );
+    }
+
+
+    const result =
+      await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+
+
+    console.log(
+      "✅ Login successful:",
+      result.user.uid
+    );
+
+
+    if (messageElement) {
+
+      messageElement.style.color =
+        "green";
+
+      messageElement.textContent =
+        "Login successful.";
+    }
+
+
+    /*
+     * onAuthStateChanged kee yoo jiru,
+     * inni user UI gara Home geessa.
+     */
+
+
+  } catch (error) {
+
+    console.error(
+      "❌ LOGIN ERROR:",
+      error?.code,
+      error?.message,
+      error
+    );
+
+
+    let message =
+      "Login failed.";
+
+
+    switch (
+      error?.code
+    ) {
+
+      case "auth/invalid-credential":
+
+        message =
+          "Email ykn password sirrii miti.";
+
+        break;
+
+
+      case "auth/invalid-email":
+
+        message =
+          "Email sirrii galchi.";
+
+        break;
+
+
+      case "auth/user-disabled":
+
+        message =
+          "Account kun disabled dha.";
+
+        break;
+
+
+      case "auth/user-not-found":
+
+        message =
+          "Account kana hin argamne.";
+
+        break;
+
+
+      case "auth/wrong-password":
+
+        message =
+          "Password sirrii miti.";
+
+        break;
+
+
+      case "auth/too-many-requests":
+
+        message =
+          "Login yaalii baay'ee ta'e. Mee yeroo muraasa eegi.";
+
+        break;
+
+
+      default:
+
+        message =
+          error?.message ||
+          "Login failed.";
+    }
+
+
+    if (messageElement) {
+
+      messageElement.style.color =
+        "#d9534f";
+
+      messageElement.textContent =
+        message;
+    }
+  }
+};
 
 
 /* =========================================================
