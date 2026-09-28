@@ -1,19 +1,62 @@
 /* =========================================================
-   CCUS - app.js (Optimized, Secure & Bug-Free)
+CCUS - app.js
+Stable Client Application
+Firebase JS SDK 12.18.0
+
+IMPORTANT:
+Financial operations such as:
+- recharge approval
+- withdrawal approval/rejection/refund
+- referral commission credit
+- VIP payout
+
+MUST be enforced by trusted backend / Cloud Functions
+and Firestore Security Rules.
 ========================================================= */
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 import {
-  getAuth, setPersistence, browserLocalPersistence,
-  createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail,
-  onAuthStateChanged, signOut, updateProfile, reauthenticateWithCredential, EmailAuthProvider, updateEmail
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  onAuthStateChanged,
+  signOut,
+  updateProfile,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  updateEmail
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+
 import {
-  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  doc, getDoc, getDocs, setDoc, updateDoc, addDoc, collection, query, where, limit, onSnapshot, serverTimestamp, runTransaction
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  addDoc,
+  collection,
+  query,
+  where,
+  limit,
+  onSnapshot,
+  serverTimestamp,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
-/* Config & Auth Initialization */
+
+/* =========================================================
+FIREBASE CONFIG
+========================================================= */
+
 const firebaseConfig = {
   apiKey: "AIzaSyBzUV7DuR87GmVwvbzwww_tfxlpzfBMp6k",
   authDomain: "ccus-6900f.firebaseapp.com",
@@ -26,1557 +69,7964 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
-setPersistence(auth, browserLocalPersistence).catch(console.error);
 
-/* Global States & Dynamic Key Storage */
-let currentUser = null, currentUserData = null;
-let selectedRechargeAmount = 0, selectedRechargeLevel = null, selectedDepositPaymentMethod = null, selectedWithdrawAmount = 0;
-let rechargeLevels = [], withdrawLevels = [], userPaymentMethods = [], vipLevelsList = [];
-window.dailyTasksCache = window.dailyTasksCache || [];
-window.taskSettings = window.taskSettings || { active: true, taskCount: 0, rewardPerTask: 0 };
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+});
+
+setPersistence(
+  auth,
+  browserLocalPersistence
+).catch(console.error);
+
+
+/* =========================================================
+GLOBAL STATE
+========================================================= */
+
+let currentUser = null;
+let currentUserData = null;
+
+let selectedRechargeAmount = 0;
+let selectedRechargeLevel = null;
+let selectedDepositPaymentMethod = null;
+let selectedWithdrawAmount = 0;
+
+let rechargeLevels = [];
+let withdrawLevels = [];
+let userPaymentMethods = [];
+let vipLevelsList = [];
+
 let unsubs = {};
 
-const COUNT_KEY = "ccus_announcement_unread_count";
-const SEEN_KEY = "ccus_seen_announcement_ids";
-const INITIALIZED_KEY = "ccus_announcement_initialized";
+window.dailyTasksCache =
+  window.dailyTasksCache || [];
 
-/* Utilities & Helpers */
-const $ = id => document.getElementById(id);
-const setText = (id, val) => { const el = $(id); if (el) el.textContent = val; };
-const money = amt => Number(amt || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const escapeHtml = str => String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-const showElement = id => $(id)?.classList.remove("hidden");
-const hideElement = id => $(id)?.classList.add("hidden");
-const getTime = val => val?.toMillis ? val.toMillis() : (new Date(val).getTime() || 0);
-const getLocalDateString = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+window.taskSettings =
+  window.taskSettings || {
+    active: true,
+    taskCount: 0,
+    rewardPerTask: 0
+  };
 
-const isTaskAbortError = err => ["aborterror", "aborted", "cancelled", "canceled", "failed to fetch", "network error"].some(m => String(err?.name || err?.message || "").toLowerCase().includes(m));
-const isTaskPermissionError = err => err?.code === "permission-denied";
 
-/* Storage Helpers */
-const getStorage = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
-const getSeenIds = () => getStorage(SEEN_KEY, []);
+/* =========================================================
+STORAGE KEYS
+========================================================= */
+
+const COUNT_KEY =
+  "ccus_announcement_unread_count";
+
+const SEEN_KEY =
+  "ccus_seen_announcement_ids";
+
+const INITIALIZED_KEY =
+  "ccus_announcement_initialized";
+
+
+/* =========================================================
+HELPERS
+========================================================= */
+
+const $ = id =>
+  document.getElementById(id);
+
+
+const setText = (
+  id,
+  value
+) => {
+  const el = $(id);
+
+  if (el) {
+    el.textContent =
+      value ?? "";
+  }
+};
+
+
+const money = amount =>
+  Number(amount || 0).toLocaleString(
+    "en-US",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }
+  );
+
+
+/* ---------------------------------------------------------
+SAFE HTML ESCAPE
+--------------------------------------------------------- */
+
+const escapeHtml = value =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+
+/* ---------------------------------------------------------
+SHOW / HIDE
+--------------------------------------------------------- */
+
+const showElement = id => {
+  const el = $(id);
+
+  if (el) {
+    el.classList.remove("hidden");
+  }
+};
+
+
+const hideElement = id => {
+  const el = $(id);
+
+  if (el) {
+    el.classList.add("hidden");
+  }
+};
+
+
+/* ---------------------------------------------------------
+TIME
+--------------------------------------------------------- */
+
+const getTime = value => {
+  if (!value) return 0;
+
+  try {
+    if (
+      typeof value.toMillis ===
+      "function"
+    ) {
+      return value.toMillis();
+    }
+
+    const time =
+      new Date(value).getTime();
+
+    return Number.isFinite(time)
+      ? time
+      : 0;
+
+  } catch {
+    return 0;
+  }
+};
+
+
+/* ---------------------------------------------------------
+ETHIOPIA DATE
+--------------------------------------------------------- */
+
+function getEthiopiaDateParts(
+  date = new Date()
+) {
+  const utcMs =
+    date.getTime();
+
+  const ethiopia =
+    new Date(
+      utcMs +
+      3 * 60 * 60 * 1000
+    );
+
+  return {
+    year:
+      ethiopia.getUTCFullYear(),
+
+    month:
+      ethiopia.getUTCMonth() + 1,
+
+    day:
+      ethiopia.getUTCDate(),
+
+    hour:
+      ethiopia.getUTCHours(),
+
+    minute:
+      ethiopia.getUTCMinutes(),
+
+    weekday:
+      ethiopia.getUTCDay()
+  };
+}
+
+
+function getLocalDateString() {
+  const d =
+    getEthiopiaDateParts();
+
+  return `${d.year}-${String(
+    d.month
+  ).padStart(2, "0")}-${String(
+    d.day
+  ).padStart(2, "0")}`;
+}
+
+
+function getEthiopiaMinutes() {
+  const d =
+    getEthiopiaDateParts();
+
+  return (
+    d.hour * 60 +
+    d.minute
+  );
+}
+
+
+/* ---------------------------------------------------------
+TASK ERROR HELPERS
+--------------------------------------------------------- */
+
+const isTaskAbortError =
+  error => {
+    const text =
+      String(
+        error?.name ||
+        error?.message ||
+        ""
+      ).toLowerCase();
+
+    return [
+      "aborterror",
+      "aborted",
+      "cancelled",
+      "canceled",
+      "failed to fetch",
+      "network error"
+    ].some(
+      item =>
+        text.includes(item)
+    );
+  };
+
+
+const isTaskPermissionError =
+  error => {
+    return error?.code === "permission-denied";
+  };
+
+
+/* =========================================================
+LOCAL STORAGE
+========================================================= */
+
+function getStorage(
+  key,
+  fallback
+) {
+  try {
+    const value =
+      localStorage.getItem(key);
+
+    if (value === null) {
+      return fallback;
+    }
+
+    const parsed =
+      JSON.parse(value);
+
+    return parsed ?? fallback;
+
+  } catch {
+    return fallback;
+  }
+}
+
+
+function getSeenIds() {
+  const value =
+    getStorage(
+      SEEN_KEY,
+      []
+    );
+
+  return Array.isArray(value)
+    ? value.map(String)
+    : [];
+}
+
 
 function saveSeenIds(ids) {
   try {
-    const uniqueIds = [...new Set((ids || []).filter(Boolean).map(String))];
-    localStorage.setItem(SEEN_KEY, JSON.stringify(uniqueIds));
-  } catch (e) { console.warn("Failed to save announcement seen IDs:", e); }
-  updateAnnouncementNotificationCount();
-}
+    const uniqueIds = [
+      ...new Set(
+        (ids || [])
+          .filter(Boolean)
+          .map(String)
+      )
+    ];
 
-function getAnnouncementUnreadCount() { return Math.max(0, Number(localStorage.getItem(COUNT_KEY) || 0)); }
-function setAnnouncementUnreadCount(count) {
-  localStorage.setItem(COUNT_KEY, String(Math.max(0, Number(count || 0))));
-  updateAnnouncementNotificationCount();
-}
+    localStorage.setItem(
+      SEEN_KEY,
+      JSON.stringify(uniqueIds)
+    );
 
-/* Operating System Logic */
-async function getTodayOperatingStatus() {
-  if (new Date().getDay() === 0) return { allowed: false, message: "Today is Sunday", reason: "sunday" };
-  try {
-    const snap = await getDoc(doc(db, "settings", "calendar"));
-    if (!snap.exists()) return { allowed: true, message: "", reason: "normal" };
-    const data = snap.data() || {}, today = getLocalDateString();
-    const closed = [...(data.closedDates || []), ...(data.restDates || []), ...(data.closedDays || []), ...(data.dates || [])].map(String);
-    if (closed.includes(today) || data.closed || data.isClosed) return { allowed: false, message: "Today is Rest Day", reason: "rest" };
-    const daySetting = data.days?.[today];
-    if (daySetting === true || daySetting === "true" || daySetting?.closed || daySetting?.isClosed || daySetting?.rest || daySetting?.restDay) {
-      return { allowed: false, message: "Today is Rest Day", reason: "rest" };
-    }
-    return { allowed: true, message: "", reason: "normal" };
-  } catch (e) { return { allowed: true, message: "", reason: "calendar-error" }; }
-}
-
-async function hasApprovedDeposit(userId) {
-  if (!userId) return false;
-  try { return !(await getDocs(query(collection(db, "rechargeRequests"), where("userId", "==", userId), where("status", "==", "approved"), limit(1)))).empty; }
-  catch (e) { return false; }
-}
-
-function firebaseErrorMessage(err) {
-  switch (err?.code) {
-    case "auth/invalid-credential": case "auth/wrong-password": return "Invalid email or password.";
-    case "auth/user-not-found": return "No user found with this email.";
-    case "auth/email-already-in-use": return "This email is already registered.";
-    case "auth/too-many-requests": return "Too many attempts. Please try again later.";
-    case "auth/network-request-failed": return "Network error. Check connection.";
-    default: return err?.message || "An error occurred. Try again.";
+  } catch (error) {
+    console.warn(
+      "Failed to save announcement seen IDs:",
+      error
+    );
   }
 }
 
-function showMessage(msg) {
-  for (const id of ["loginMessage", "signupMessage", "withdrawMessage", "personalInfoMessage", "personalInformationMessage"]) {
+
+function getAnnouncementUnreadCount() {
+  try {
+    return Math.max(
+      0,
+      Number(
+        localStorage.getItem(
+          COUNT_KEY
+        ) || 0
+      )
+    );
+
+  } catch {
+    return 0;
+  }
+}
+
+
+function setAnnouncementUnreadCount(
+  count
+) {
+  const safeCount =
+    Math.max(
+      0,
+      Math.floor(
+        Number(count || 0)
+      )
+    );
+
+  try {
+    localStorage.setItem(
+      COUNT_KEY,
+      String(safeCount)
+    );
+  } catch {}
+
+  if (
+    typeof window.ccusNotifUpdateBadge ===
+    "function"
+  ) {
+    window.ccusNotifUpdateBadge();
+  }
+}
+
+
+/* =========================================================
+ERROR MESSAGE
+========================================================= */
+
+function firebaseErrorMessage(
+  error
+) {
+  switch (error?.code) {
+
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+      return "Invalid email or password.";
+
+    case "auth/user-not-found":
+      return "No user found with this email.";
+
+    case "auth/email-already-in-use":
+      return "This email is already registered.";
+
+    case "auth/too-many-requests":
+      return "Too many attempts. Please try again later.";
+
+    case "auth/network-request-failed":
+      return "Network error. Check your connection.";
+
+    case "auth/requires-recent-login":
+      return "Please sign in again before changing sensitive information.";
+
+    case "permission-denied":
+    case "firestore/permission-denied":
+      return "You do not have permission to perform this action.";
+
+    default:
+      return (
+        error?.message ||
+        "An error occurred. Please try again."
+      );
+  }
+}
+
+
+/* =========================================================
+MESSAGE UI
+========================================================= */
+
+function showMessage(
+  message
+) {
+  const ids = [
+    "loginMessage",
+    "signupMessage",
+    "withdrawMessage",
+    "personalInfoMessage",
+    "personalInformationMessage"
+  ];
+
+  for (const id of ids) {
+
     const box = $(id);
-    if (box && !box.closest(".hidden")) { box.textContent = msg; box.className = "message error"; return; }
+
+    if (
+      box &&
+      !box.closest(".hidden")
+    ) {
+      box.textContent =
+        message;
+
+      box.className =
+        "message error";
+
+      return;
+    }
   }
-  alert(msg);
+
+  alert(message);
 }
 
-window.openTelegramSupport = () => window.open("https://t.me/CCUSSuppor", "_blank", "noopener,noreferrer");
 
-/* Auth Actions */
-window.loginUser = async () => {
-  const e = $("loginEmail")?.value?.trim(), p = $("loginPassword")?.value;
-  if (!e || !p) return showMessage("Please enter email & password.");
-  try { await signInWithEmailAndPassword(auth, e, p); } catch (err) { showMessage(firebaseErrorMessage(err)); }
-};
+/* =========================================================
+TELEGRAM SUPPORT
+========================================================= */
 
-window.logoutUser = async () => { try { cleanupListeners(); await signOut(auth); } catch (err) { showMessage(firebaseErrorMessage(err)); } };
+window.openTelegramSupport =
+  () => {
+    const username =
+      "CCUSSuppor";
 
-window.forgotPassword = async () => {
-  const e = $("loginEmail")?.value?.trim();
-  if (!e) return showMessage("Please enter email first.");
-  try { await sendPasswordResetEmail(auth, e); showMessage("Reset link sent."); } catch (err) { showMessage(firebaseErrorMessage(err)); }
-};
+    window.open(
+      `https://t.me/${username}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  };
 
-window.signupUser = async () => {
-  const name = $("signupName")?.value?.trim(), e = $("signupEmail")?.value?.trim(), p = $("signupPassword")?.value, cp = $("signupConfirmPassword")?.value, ref = $("referralCode")?.value?.trim();
-  if (!name || !e) return showMessage("Fill all required fields.");
-  if (p.length < 6 || p !== cp) return showMessage(p.length < 6 ? "Password must be at least 6 chars." : "Passwords do not match.");
+
+/* =========================================================
+AUTH FUNCTIONS
+========================================================= */
+
+const loginUser = async () => {
+  const email =
+    $("loginEmail")
+      ?.value
+      ?.trim();
+
+  const password =
+    $("loginPassword")
+      ?.value || "";
+
+  if (
+    !email ||
+    !password
+  ) {
+    return showMessage(
+      "Please enter email and password."
+    );
+  }
+
   try {
-    const cred = await createUserWithEmailAndPassword(auth, e, p);
-    await updateProfile(cred.user, { displayName: name });
-    const code = "CCUS" + cred.user.uid.substring(0, 6).toUpperCase();
-    await setDoc(doc(db, "users", cred.user.uid), {
-      uid: cred.user.uid, fullName: name, email: e, accountNumber: "CCUS" + cred.user.uid.substring(0, 8).toUpperCase(),
-      referralCode: code, referredBy: ref || "", totalBalance: 0, totalRecharge: 0, vipLevel: "VIP 0", createdAt: serverTimestamp()
-    });
-    if (ref) await addDoc(collection(db, "referrals"), { referredUserId: cred.user.uid, referredUserName: name, referralCode: ref, createdAt: serverTimestamp() }).catch(console.warn);
-    showMessage("Account created.");
-  } catch (err) { showMessage(firebaseErrorMessage(err)); }
+    await signInWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+
+  } catch (error) {
+    showMessage(
+      firebaseErrorMessage(error)
+    );
+  }
 };
 
-/* Page Routing & Cleanups */
-function hideAllPages() { ["loginPage","signupPage","homePage","tasksPage","walletPage","depositPage","withdrawPage","profilePage","referralPage","helpPage","aboutPage","vipPage","announcementsPage"].forEach(hideElement); }
 
-function updateBottomNav(activePage) {
-  const items = $("bottomNav")?.querySelectorAll(".nav-item");
-  if (!items) return;
-  items.forEach(i => i.classList.remove("active"));
-  const idx = { home:0, tasks:1, vip:1, team:2, referral:2, wallet:3, profile:4 }[activePage];
-  if (idx !== undefined && items[idx]) items[idx].classList.add("active");
+const logoutUser = async () => {
+  try {
+    cleanupListeners();
+    await signOut(auth);
+  } catch (error) {
+    showMessage(
+      firebaseErrorMessage(error)
+    );
+  }
+};
+
+
+const forgotPassword = async () => {
+  const email =
+    $("loginEmail")
+      ?.value
+      ?.trim();
+
+  if (!email) {
+    return showMessage(
+      "Please enter your email first."
+    );
+  }
+
+  try {
+    await sendPasswordResetEmail(
+      auth,
+      email
+    );
+
+    showMessage(
+      "Password reset link sent to your email."
+    );
+
+  } catch (error) {
+    showMessage(
+      firebaseErrorMessage(error)
+    );
+  }
+};
+
+
+const signupUser = async () => {
+  const name =
+    $("signupName")
+      ?.value
+      ?.trim() || "";
+
+  const email =
+    $("signupEmail")
+      ?.value
+      ?.trim() || "";
+
+  const password =
+    $("signupPassword")
+      ?.value || "";
+
+  const confirmPassword =
+    $("signupConfirmPassword")
+      ?.value || "";
+
+  const referralCode =
+    $("referralCode")
+      ?.value
+      ?.trim() || "";
+
+  if (
+    !name ||
+    !email
+  ) {
+    return showMessage(
+      "Please fill all required fields."
+    );
+  }
+
+  if (
+    password.length < 6
+  ) {
+    return showMessage(
+      "Password must be at least 6 characters."
+    );
+  }
+
+  if (
+    password !==
+    confirmPassword
+  ) {
+    return showMessage(
+      "Passwords do not match."
+    );
+  }
+
+  try {
+    const credential =
+      await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+
+    await updateProfile(
+      credential.user,
+      {
+        displayName:
+          name
+      }
+    );
+
+    const uid =
+      credential.user.uid;
+
+    const referralGenerated =
+      "CCUS" +
+      uid
+        .substring(0, 6)
+        .toUpperCase();
+
+    const accountNumber =
+      "CCUS" +
+      uid
+        .substring(0, 8)
+        .toUpperCase();
+
+    await setDoc(
+      doc(
+        db,
+        "users",
+        uid
+      ),
+      {
+        uid,
+        fullName: name,
+        email,
+        accountNumber,
+        referralCode: referralGenerated,
+        referredBy: referralCode,
+        totalBalance: 0,
+        totalRecharge: 0,
+        vipLevel: "VIP 0",
+        createdAt: serverTimestamp()
+      }
+    );
+
+    if (referralCode) {
+      await addDoc(
+        collection(
+          db,
+          "referrals"
+        ),
+        {
+          referredUserId: uid,
+          referredUserName: name,
+          referralCode,
+          createdAt: serverTimestamp()
+        }
+      ).catch(
+        error => {
+          console.warn(
+            "Referral record failed:",
+            error
+          );
+        }
+      );
+    }
+
+    showMessage(
+      "Account created successfully."
+    );
+
+  } catch (error) {
+    showMessage(
+      firebaseErrorMessage(error)
+    );
+  }
+};
+
+/* Explicit Window Binding for HTML standard onclick handlers */
+window.loginUser = loginUser;
+window.logoutUser = logoutUser;
+window.forgotPassword = forgotPassword;
+window.signupUser = signupUser;
+
+
+/* =========================================================
+PAGE ROUTING
+========================================================= */
+
+function hideAllPages() {
+  [
+    "loginPage",
+    "signupPage",
+    "homePage",
+    "tasksPage",
+    "walletPage",
+    "depositPage",
+    "withdrawPage",
+    "profilePage",
+    "referralPage",
+    "helpPage",
+    "aboutPage",
+    "vipPage",
+    "incomePage",
+    "announcementsPage"
+  ].forEach(
+    hideElement
+  );
 }
+
+
+function updateBottomNav(
+  activePage
+) {
+  const items =
+    $("bottomNav")
+      ?.querySelectorAll(
+        ".nav-item"
+      );
+
+  if (!items) return;
+
+  items.forEach(
+    item =>
+      item.classList.remove(
+        "active"
+      )
+  );
+
+  const indexMap = {
+    home: 0,
+    tasks: 1,
+    vip: 1,
+    team: 2,
+    referral: 2,
+    wallet: 3,
+    profile: 4
+  };
+
+  const index =
+    indexMap[activePage];
+
+  if (
+    index !== undefined &&
+    items[index]
+  ) {
+    items[index].classList.add(
+      "active"
+    );
+  }
+}
+
+
+/* =========================================================
+LISTENER CLEANUP
+========================================================= */
+
+function stopListener(
+  key
+) {
+  if (
+    typeof unsubs[key] ===
+    "function"
+  ) {
+    try {
+      unsubs[key]();
+    } catch (error) {
+      console.warn(
+        `Failed to stop listener "${key}":`,
+        error
+      );
+    }
+  }
+
+  unsubs[key] = null;
+}
+
 
 function clearPageSpecificListeners() {
-  ["rechargeLevels","withdrawLevels","userPaymentMethods","rechargeHistory","withdrawHistory","tasks","vipLevels","teamCommissions"].forEach(k => { if (unsubs[k]) { unsubs[k](); unsubs[k] = null; } });
-  if (window.ccusAnnouncementUnsubscribe) { window.ccusAnnouncementUnsubscribe(); window.ccusAnnouncementUnsubscribe = null; }
+  [
+    "rechargeLevels",
+    "withdrawLevels",
+    "userPaymentMethods",
+    "rechargeHistory",
+    "withdrawHistory",
+    "tasks",
+    "vipLevels",
+    "teamCommissions"
+  ].forEach(
+    stopListener
+  );
+
+  if (
+    typeof window.ccusNotifStopListener ===
+    "function"
+  ) {
+    window.ccusNotifStopListener();
+  }
 }
 
-function cleanupListeners() { if (unsubs.user) unsubs.user(); unsubs = {}; clearPageSpecificListeners(); }
 
-window.openPage = function (page) {
-  if (["login", "signup"].includes(page)) { cleanupListeners(); hideAllPages(); hideElement("bottomNav"); showElement(page === "login" ? "loginPage" : "signupPage"); return; }
-  if (!currentUser) return window.showLogin();
-  clearPageSpecificListeners(); hideAllPages();
-  const pageMap = { home: "homePage", tasks: "tasksPage", wallet: "walletPage", deposit: "depositPage", withdraw: "withdrawPage", profile: "profilePage", referral: "referralPage", team: "referralPage", help: "helpPage", about: "aboutPage", vip: "vipPage" };
-  
+function cleanupListeners() {
+  clearPageSpecificListeners();
+  stopListener("user");
+  unsubs = {};
+  window.dailyTasksCache = [];
+}
+
+
+/* =========================================================
+OPEN PAGE
+========================================================= */
+
+window.openPage = function(page) {
+  if (
+    page === "login" ||
+    page === "signup"
+  ) {
+    cleanupListeners();
+    hideAllPages();
+    hideElement("bottomNav");
+
+    showElement(
+      page === "login"
+        ? "loginPage"
+        : "signupPage"
+    );
+    return;
+  }
+
+  if (!currentUser) {
+    return window.showLogin();
+  }
+
+  clearPageSpecificListeners();
+  hideAllPages();
+
+  const pageMap = {
+    home: "homePage",
+    tasks: "tasksPage",
+    wallet: "walletPage",
+    deposit: "depositPage",
+    withdraw: "withdrawPage",
+    profile: "profilePage",
+    referral: "referralPage",
+    team: "referralPage",
+    help: "helpPage",
+    about: "aboutPage",
+    vip: "vipPage",
+    income: "incomePage"
+  };
+
   if (page === "announcements") {
-    if ($("announcementsPage")) { showElement("announcementsPage"); showElement("bottomNav"); updateBottomNav("home"); loadAnnouncements(true); return; }
+    if ($("announcementsPage")) {
+      showElement("announcementsPage");
+      showElement("bottomNav");
+      updateBottomNav("home");
+
+      if (typeof window.loadAnnouncements === "function") {
+        window.loadAnnouncements(true);
+      }
+      return;
+    }
     page = "home";
   }
-  showElement(pageMap[page] || "homePage"); showElement("bottomNav"); updateBottomNav(page);
+
+  showElement(pageMap[page] || "homePage");
+  showElement("bottomNav");
+  updateBottomNav(page);
 
   switch (page) {
-    case "home": updateUserUI(); loadAnnouncements(); break;
-    case "tasks": updateUserUI(); loadDailyTasks(); break;
-    case "vip": updateUserUI(); loadVIPLevels(); break;
-    case "wallet": updateUserUI(); loadRechargeHistory(); loadWithdrawHistory(); break;
-    case "deposit": resetRechargePage(); loadRechargeLevels(); loadUserPaymentMethods(); break;
-    case "withdraw": resetWithdrawPage(); updateUserUI(); loadWithdrawLevels(); loadWithdrawHistory(); break;
-    case "profile": updateUserUI(); loadPersonalInformation(); break;
-    case "referral": case "team": updateUserUI(); loadReferral(); break;
+    case "home":
+      updateUserUI();
+      if (typeof window.loadAnnouncements === "function") {
+        window.loadAnnouncements(false);
+      }
+      break;
+
+    case "tasks":
+      updateUserUI();
+      if (typeof window.loadDailyTasks === "function") {
+        window.loadDailyTasks();
+      }
+      break;
+
+    case "vip":
+      updateUserUI();
+      if (typeof window.loadVIPLevels === "function") {
+        window.loadVIPLevels();
+      }
+      break;
+
+    case "income":
+      updateUserUI();
+      if (typeof window.loadIncomeLevels === "function") {
+        window.loadIncomeLevels();
+      }
+      break;
+
+    case "wallet":
+      updateUserUI();
+      loadRechargeHistory();
+      if (typeof window.loadWithdrawHistory === "function") {
+        window.loadWithdrawHistory();
+      }
+      break;
+
+    case "deposit":
+      resetRechargePage();
+      loadRechargeLevels();
+      loadUserPaymentMethods();
+      break;
+
+    case "withdraw":
+      if (typeof window.resetWithdrawPage === "function") {
+        window.resetWithdrawPage();
+      }
+      updateUserUI();
+
+      if (typeof window.loadWithdrawLevels === "function") {
+        window.loadWithdrawLevels();
+      }
+
+      if (typeof window.loadWithdrawHistory === "function") {
+        window.loadWithdrawHistory();
+      }
+      break;
+
+    case "profile":
+      updateUserUI();
+      loadPersonalInformation();
+      break;
+
+    case "referral":
+    case "team":
+      updateUserUI();
+      if (typeof window.loadReferral === "function") {
+        window.loadReferral();
+      }
+      break;
   }
 };
-window.navigate = window.openPage;
-window.showLogin = () => { cleanupListeners(); hideAllPages(); hideElement("bottomNav"); showElement("loginPage"); };
-window.showSignup = () => { cleanupListeners(); hideAllPages(); hideElement("bottomNav"); showElement("signupPage"); };
 
-/* Auth State Listener */
-onAuthStateChanged(auth, async user => {
-  currentUser = user || null;
-  if (!user) { currentUserData = null; cleanupListeners(); hideAllPages(); hideElement("bottomNav"); showElement("loginPage"); updateAnnouncementNotificationCount(); return; }
-  try {
-    const snap = await getDoc(doc(db, "users", user.uid));
-    currentUserData = snap.exists() ? snap.data() : null;
-    hideAllPages(); showElement("homePage"); showElement("bottomNav"); updateBottomNav("home");
-    updateUserUI(); startUserListener(); loadAnnouncements(); checkAndProcessVIPPayouts();
-  } catch (e) { console.error(e); }
-});
+
+window.navigate = window.openPage;
+
+window.showLogin = () => {
+  cleanupListeners();
+  hideAllPages();
+  hideElement("bottomNav");
+  showElement("loginPage");
+};
+
+window.showSignup = () => {
+  cleanupListeners();
+  hideAllPages();
+  hideElement("bottomNav");
+  showElement("signupPage");
+};
+
+
+/* =========================================================
+AUTH STATE
+========================================================= */
+
+onAuthStateChanged(
+  auth,
+  async user => {
+    currentUser = user || null;
+
+    if (!user) {
+      currentUserData = null;
+      cleanupListeners();
+      hideAllPages();
+      hideElement("bottomNav");
+      showElement("loginPage");
+
+      if (typeof window.ccusNotifUpdateBadge === "function") {
+        window.ccusNotifUpdateBadge();
+      }
+      return;
+    }
+
+    try {
+      const userSnap = await getDoc(
+        doc(
+          db,
+          "users",
+          user.uid
+        )
+      );
+
+      currentUserData = userSnap.exists()
+        ? userSnap.data()
+        : null;
+
+      hideAllPages();
+      showElement("homePage");
+      showElement("bottomNav");
+      updateBottomNav("home");
+
+      updateUserUI();
+      startUserListener();
+
+      if (typeof window.loadAnnouncements === "function") {
+        window.loadAnnouncements(false);
+      }
+
+    } catch (error) {
+      console.error(
+        "Auth initialization error:",
+        error
+      );
+    }
+  }
+);
+
+
+/* =========================================================
+USER LISTENER
+========================================================= */
 
 function startUserListener() {
   if (!currentUser) return;
-  if (unsubs.user) unsubs.user();
-  unsubs.user = onSnapshot(doc(db, "users", currentUser.uid), snap => { if (snap.exists()) { currentUserData = snap.data(); updateUserUI(); } });
+
+  stopListener("user");
+
+  unsubs.user = onSnapshot(
+    doc(
+      db,
+      "users",
+      currentUser.uid
+    ),
+    snap => {
+      if (!snap.exists()) {
+        currentUserData = null;
+        return;
+      }
+      currentUserData = snap.data();
+      updateUserUI();
+    },
+    error => {
+      console.error(
+        "User listener error:",
+        error
+      );
+    }
+  );
 }
+
+
+/* =========================================================
+USER UI
+========================================================= */
 
 function updateUserUI() {
-  if (!currentUserData) return;
-  const b = money(currentUserData.totalBalance), r = money(currentUserData.totalRecharge);
-  ["totalBalance", "walletTotalBalance", "withdrawTotalBalance"].forEach(id => setText(id, b));
-  ["totalRecharge", "walletTotalRecharge"].forEach(id => setText(id, r));
-  setText("profileName", currentUserData.fullName || currentUser?.displayName || "CCUS User");
-  setText("profileEmail", currentUserData.email || currentUser?.email || "No email");
-  setText("profileAccountNumber", currentUserData.accountNumber || "—");
-  setText("referralCodeDisplay", currentUserData.referralCode || "");
-  loadPersonalInformation();
+  if (!currentUserData) {
+    return;
+  }
+
+  const balance = money(currentUserData.totalBalance);
+  const recharge = money(currentUserData.totalRecharge);
+
+  [
+    "totalBalance",
+    "walletTotalBalance",
+    "withdrawTotalBalance"
+  ].forEach(
+    id => setText(id, balance)
+  );
+
+  [
+    "totalRecharge",
+    "walletTotalRecharge"
+  ].forEach(
+    id => setText(id, recharge)
+  );
+
+  setText(
+    "profileName",
+    currentUserData.fullName ||
+    currentUser?.displayName ||
+    "CCUS User"
+  );
+
+  setText(
+    "profileEmail",
+    currentUserData.email ||
+    currentUser?.email ||
+    "No email"
+  );
+
+  setText(
+    "referralCodeDisplay",
+    currentUserData.referralCode || ""
+  );
 }
 
-/* Personal Information System */
-function loadPersonalInformation() {
-  if (!currentUser) return;
-  const data = currentUserData || {};
-  const setVal = (id, value) => { const el = $(id); if (el) el.value = value ?? ""; };
 
-  setVal("personalFullName", data.fullName || currentUser.displayName || "");
-  setVal("personalEmail", data.email || currentUser.email || "");
-  setVal("personalAccountNumber", data.accountNumber || "");
-  setVal("personalPaymentMethod", data.withdrawPaymentMethod || "");
+/* =========================================================
+PERSONAL INFORMATION
+========================================================= */
+
+function loadPersonalInformation() {
+  if (!currentUser) {
+    return;
+  }
+
+  const data = currentUserData || {};
+
+  const setValue = (id, value) => {
+    const el = $(id);
+    if (el) {
+      el.value = value ?? "";
+    }
+  };
+
+  setValue(
+    "personalFullName",
+    data.fullName || currentUser.displayName || ""
+  );
+
+  setValue(
+    "personalEmail",
+    data.email || currentUser.email || ""
+  );
+
+  setValue(
+    "personalAccountNumber",
+    data.accountNumber || ""
+  );
+
+  setValue(
+    "personalPaymentMethod",
+    data.withdrawPaymentMethod || ""
+  );
 
   hidePersonalInformationMessage();
 }
 
-function showPersonalInformationMessage(message, type = "success") {
+
+function showPersonalInformationMessage(
+  message,
+  type = "success"
+) {
   const box = $("personalInfoMessage");
   if (!box) return;
-  const styles = {
-    success: { bg: "#e8f7ee", color: "#198754", border: "1px solid #b7e4c7" },
-    error:   { bg: "#fdeaea", color: "#dc3545", border: "1px solid #f5c2c7" },
-    info:    { bg: "#eef5ff", color: "#0d6efd", border: "1px solid #b6d4fe" }
-  };
-  const style = styles[type] || styles.info;
+
   box.textContent = message;
   box.className = `message ${type}`;
-  box.style.background = style.bg; box.style.color = style.color; box.style.border = style.border;
   box.classList.remove("hidden");
 }
+
 
 function hidePersonalInformationMessage() {
   const box = $("personalInfoMessage");
   if (!box) return;
-  box.textContent = ""; box.className = "hidden";
+
+  box.textContent = "";
+  box.className = "hidden";
 }
 
-window.savePersonalInformation = async function () {
-  if (!currentUser) return showPersonalInformationMessage("Please login first.", "error");
-  if (window._ccusPersonalInformationSaving) return;
 
-  const getValue = id => $(id)?.value?.trim() || "";
+window.savePersonalInformation = async function() {
+  if (!currentUser) {
+    return showPersonalInformationMessage(
+      "Please login first.",
+      "error"
+    );
+  }
+
+  if (window._ccusPersonalInformationSaving) {
+    return;
+  }
+
+  const getValue = id =>
+    $(id)?.value?.trim() || "";
+
   const name = getValue("personalFullName");
   const email = getValue("personalEmail");
-  const accountNumber = getValue("personalAccountNumber");
   const paymentMethod = getValue("personalPaymentMethod");
   const password = $("personalPassword")?.value || "";
 
-  if (!name) return showPersonalInformationMessage("Please enter your full name.", "error");
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showPersonalInformationMessage("Please enter a valid email address.", "error");
-  if (!accountNumber) return showPersonalInformationMessage("Please enter your account number.", "error");
-  if (!password) return showPersonalInformationMessage("Please enter your current password.", "error");
+  if (!name) {
+    return showPersonalInformationMessage(
+      "Please enter your full name.",
+      "error"
+    );
+  }
+
+  if (
+    !email ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    return showPersonalInformationMessage(
+      "Please enter a valid email address.",
+      "error"
+    );
+  }
+
+  if (!password) {
+    return showPersonalInformationMessage(
+      "Please enter your current password.",
+      "error"
+    );
+  }
 
   const saveButton = $("savePersonalInformationBtn");
   window._ccusPersonalInformationSaving = true;
 
   try {
-    if (saveButton) { saveButton.disabled = true; saveButton.textContent = "Saving..."; }
-    const currentEmail = currentUser.email || currentUserData?.email || "";
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.textContent = "Saving...";
+    }
 
-    const credential = EmailAuthProvider.credential(currentEmail, password);
-    await reauthenticateWithCredential(currentUser, credential);
+    const currentEmail =
+      currentUser.email ||
+      currentUserData?.email ||
+      "";
 
-    if (name !== (currentUser.displayName || "")) await updateProfile(currentUser, { displayName: name });
-    if (email.toLowerCase() !== currentEmail.toLowerCase()) await updateEmail(currentUser, email);
+    if (!currentEmail) {
+      throw new Error("Current email is unavailable.");
+    }
 
-    await updateDoc(doc(db, "users", currentUser.uid), {
-      fullName: name, email: email, accountNumber: accountNumber, withdrawPaymentMethod: paymentMethod, updatedAt: serverTimestamp()
-    });
+    const credential = EmailAuthProvider.credential(
+      currentEmail,
+      password
+    );
 
-    currentUserData = { ...(currentUserData || {}), fullName: name, email: email, accountNumber: accountNumber, withdrawPaymentMethod: paymentMethod };
+    await reauthenticateWithCredential(
+      currentUser,
+      credential
+    );
+
+    if (name !== (currentUser.displayName || "")) {
+      await updateProfile(
+        currentUser,
+        { displayName: name }
+      );
+    }
+
+    if (email.toLowerCase() !== currentEmail.toLowerCase()) {
+      await updateEmail(currentUser, email);
+    }
+
+    const userUpdate = {
+      fullName: name,
+      email,
+      withdrawPaymentMethod: paymentMethod,
+      updatedAt: serverTimestamp()
+    };
+
+    await updateDoc(
+      doc(
+        db,
+        "users",
+        currentUser.uid
+      ),
+      userUpdate
+    );
+
+    currentUserData = {
+      ...(currentUserData || {}),
+      ...userUpdate,
+      email,
+      fullName: name,
+      withdrawPaymentMethod: paymentMethod
+    };
+
     updateUserUI();
-    showPersonalInformationMessage("Personal information saved successfully.", "success");
+
+    showPersonalInformationMessage(
+      "Personal information saved successfully.",
+      "success"
+    );
+
+    if ($("personalPassword")) {
+      $("personalPassword").value = "";
+    }
+
   } catch (error) {
-    showPersonalInformationMessage(firebaseErrorMessage(error), "error");
+    showPersonalInformationMessage(
+      firebaseErrorMessage(error),
+      "error"
+    );
+
   } finally {
     window._ccusPersonalInformationSaving = false;
-    if (saveButton) { saveButton.disabled = false; saveButton.textContent = "Save"; }
+
+    if (saveButton) {
+      saveButton.disabled = false;
+      saveButton.textContent = "Save";
+    }
   }
 };
+
+
 window.saveProfile = window.savePersonalInformation;
 
-/* Recharge System */
-function loadRechargeLevels() {
-  if (!$("rechargeAmountList")) return;
-  if (unsubs.rechargeLevels) unsubs.rechargeLevels();
-  unsubs.rechargeLevels = onSnapshot(collection(db, "rechargeLevels"), snap => {
-    rechargeLevels = [];
-    snap.forEach(d => {
-      const data = d.data() || {}, amt = Number(data.amount || 0);
-      if (data.active !== false && amt > 0) rechargeLevels.push({ id: d.id, amount: amt, depositAmount: amt, level: data.level || data.name || `Level ${d.id}`, commission: Number(data.commission || 0), order: Number(data.order ?? 9999), taskLimit: Number(data.taskLimit ?? 0) });
-    });
-    rechargeLevels.sort((a,b) => (a.order - b.order) || (a.amount - b.amount));
-    renderRechargeLevels(); renderTeamDepositLevels(rechargeLevels);
-  });
-}
-
-function renderRechargeLevels() {
-  const container = $("rechargeAmountList");
-  if (!container) return;
-  container.innerHTML = rechargeLevels.length === 0 ? `<p style="text-align:center;color:#777;padding:12px;">No recharge levels available.</p>` : "";
-  rechargeLevels.forEach(lvl => {
-    const btn = document.createElement("button"); btn.type = "button"; btn.className = "amount-btn";
-    btn.innerHTML = `<strong>${money(lvl.amount)} ETB</strong>`;
-    btn.onclick = () => {
-      selectedRechargeAmount = lvl.amount; selectedRechargeLevel = lvl;
-      if ($("rechargeAmount")) $("rechargeAmount").value = lvl.amount;
-      container.querySelectorAll(".amount-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-    };
-    container.appendChild(btn);
-  });
-}
-
-function resetRechargePage() {
-  selectedRechargeAmount = 0; selectedRechargeLevel = null; selectedDepositPaymentMethod = null;
-  showElement("rechargeStep1"); hideElement("rechargeStep2"); hideElement("rechargeStep3"); hideElement("rechargePending");
-  if ($("rechargeAmount")) $("rechargeAmount").value = "";
-  if ($("transactionId")) $("transactionId").value = "";
-}
-
-function loadUserPaymentMethods() {
-  const container = $("depositPaymentMethods"); if (!container) return;
-  if (unsubs.userPaymentMethods) unsubs.userPaymentMethods();
-  unsubs.userPaymentMethods = onSnapshot(collection(db, "settings", "paymentMethods", "methods"), snap => {
-    userPaymentMethods = [];
-    snap.forEach(d => { if (d.data()?.active !== false) userPaymentMethods.push({ id: d.id, name: d.data().name || "Payment", ...d.data() }); });
-    userPaymentMethods.sort((a,b) => Number(a.order ?? 9999) - Number(b.order ?? 9999));
-    renderPaymentMethods();
-  });
-}
-
-function renderPaymentMethods() {
-  const container = $("depositPaymentMethods"); if (!container) return;
-  container.innerHTML = userPaymentMethods.length === 0 ? `<p style="text-align:center;color:#777;">No payment methods available.</p>` : "";
-  userPaymentMethods.forEach(m => {
-    const btn = document.createElement("button"); btn.type = "button"; btn.className = "payment-method-btn";
-    btn.style.cssText = "width:100%;padding:10px;margin-bottom:8px;border:1px solid #ccc;border-radius:6px;background:#fff;";
-    btn.textContent = m.name;
-    btn.onclick = () => {
-      selectedDepositPaymentMethod = m;
-      container.querySelectorAll(".payment-method-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-    };
-    container.appendChild(btn);
-  });
-}
-
-window.goToPaymentMethod = () => {
-  const inputAmt = Number($("rechargeAmount")?.value || 0);
-  if (inputAmt > 0) { selectedRechargeAmount = inputAmt; selectedRechargeLevel = rechargeLevels.find(l => l.amount === inputAmt) || null; }
-  if (selectedRechargeAmount <= 0) return alert("Please select or enter a valid amount.");
-  setText("transferAmount", `ETB ${money(selectedRechargeAmount)}`);
-  hideElement("rechargeStep1"); showElement("rechargeStep2"); loadUserPaymentMethods();
-};
-
-window.goToPaymentDetails = () => {
-  if (!selectedDepositPaymentMethod) return alert("Please select a payment method.");
-  setText("finalPaymentMethod", selectedDepositPaymentMethod.name);
-  setText("finalAccountName", selectedDepositPaymentMethod.accountName || "—");
-  setText("finalAccountNumber", selectedDepositPaymentMethod.accountNumber || "—");
-  setText("finalTransferAmount", `ETB ${money(selectedRechargeAmount)}`);
-  hideElement("rechargeStep2"); showElement("rechargeStep3");
-};
-
-window.backToAmountStep = () => { hideElement("rechargeStep2"); showElement("rechargeStep1"); };
-window.backToPaymentMethod = () => { hideElement("rechargeStep3"); showElement("rechargeStep2"); };
-
-window.submitRecharge = async () => {
-  if (!currentUser || window._ccusRechargeSubmitting) return;
-  const txId = $("transactionId")?.value?.trim();
-  if (!txId) return alert("Please enter Transaction ID.");
-  if (selectedRechargeAmount <= 0 || !selectedDepositPaymentMethod) return alert("Invalid amount or method.");
-  
-  window._ccusRechargeSubmitting = true;
-  try {
-    const lvl = rechargeLevels.find(l => l.amount === selectedRechargeAmount);
-    await addDoc(collection(db, "rechargeRequests"), {
-      userId: currentUser.uid, userEmail: currentUser.email || "", userName: currentUserData?.fullName || "",
-      amount: selectedRechargeAmount, depositAmount: selectedRechargeAmount, depositLevel: lvl?.level || "General Deposit",
-      commissionAmount: Number(lvl?.commission || 0), paymentMethod: selectedDepositPaymentMethod.name,
-      accountName: selectedDepositPaymentMethod.accountName || "", accountNumber: selectedDepositPaymentMethod.accountNumber || "",
-      transactionId: txId, status: "pending", createdAt: serverTimestamp()
-    });
-    hideElement("rechargeStep3"); showElement("rechargePending");
-    if ($("transactionId")) $("transactionId").value = "";
-  } catch (err) { alert(firebaseErrorMessage(err)); } 
-  finally { window._ccusRechargeSubmitting = false; }
-};
-
-function loadRechargeHistory() {
-  const container = $("rechargeHistory"); if (!container || !currentUser) return;
-  if (unsubs.rechargeHistory) unsubs.rechargeHistory();
-  unsubs.rechargeHistory = onSnapshot(query(collection(db, "rechargeRequests"), where("userId", "==", currentUser.uid)), snap => {
-    const recs = []; snap.forEach(d => recs.push({ id: d.id, ...d.data() }));
-    recs.sort((a,b) => getTime(b.createdAt) - getTime(a.createdAt));
-    renderRechargeHistory(recs);
-  });
-}
-
-function renderRechargeHistory(recs) {
-  const container = $("rechargeHistory"); if (!container) return;
-  if (!recs?.length) return container.innerHTML = `<div class="empty-transactions"><h3>No recharge records found</h3></div>`;
-  container.innerHTML = recs.map(r => `
-    <div class="history-item ${String(r.status||"pending").toLowerCase()}">
-      <div class="history-info"><strong>Level: ${escapeHtml(r.depositLevel||"—")}</strong><span>Ref: ${escapeHtml(r.transactionId||"—")}</span></div>
-      <div class="history-right"><strong>ETB ${money(r.amount)}</strong><span class="history-status ${String(r.status||"pending").toLowerCase()}">${escapeHtml(r.status||"pending")}</span></div>
-    </div>`).join("");
-}
 
 /* =========================================================
-   CCUS - WITHDRAW SYSTEM (Optimized)
-   Hours: 9:00 AM - 5:30 PM EAT (UTC+3)
+   WITHDRAWAL & OPERATING STATUS
 ========================================================= */
 
-// --- Helper: Time & Operating Checks ---
-function isWithdrawalTimeOpen() {
-  const now = new Date();
-  const ethiopiaMinutes = (now.getUTCHours() * 60 + now.getUTCMinutes() + 180) % 1440;
-  return ethiopiaMinutes >= 540 && ethiopiaMinutes < 1050; // 09:00 (540m) to 17:30 (1050m)
-}
+const isWithdrawalTimeOpen = () => {
+  const m = getEthiopiaMinutes();
+  return m >= 540 && m < 1050; // 09:00 - 17:30 EAT
+};
 
-function getWithdrawalOperatingMessage() {
-  return "Withdrawal is available from 9:00 AM to 5:30 PM EAT (UTC+3).";
-}
+const getWithdrawalOperatingMessage = () => "Withdrawal is available from 9:00 AM to 5:30 PM EAT.";
 
 async function checkWithdrawalAllowed() {
   if (!isWithdrawalTimeOpen()) {
     showMessage(getWithdrawalOperatingMessage());
     return false;
   }
-  const st = await getTodayOperatingStatus();
-  if (!st.allowed) {
-    showMessage(st.message);
+  const status = await getTodayOperatingStatus();
+  if (!status.allowed) {
+    showMessage(status.message || "Withdrawals are unavailable today.");
     return false;
   }
   return true;
 }
 
-// --- Load Withdrawal Levels ---
-function loadWithdrawLevels() {
-  const container = $("withdrawAmountList");
+async function getTodayOperatingStatus() {
+  const ethiopia = getEthiopiaDateParts();
+  const isSunday = ethiopia.weekday === 0;
+
+  try {
+    const snapshot = await getDoc(doc(db, "settings", "calendar"));
+    if (!snapshot.exists()) {
+      return isSunday ? { allowed: false, message: "Today is Sunday.", reason: "sunday" } : { allowed: true, message: "", reason: "normal" };
+    }
+
+    const data = snapshot.data() || {};
+    const today = getLocalDateString();
+    const closedValues = [...(data.closedDates || []), ...(data.restDates || []), ...(data.closedDays || []), ...(data.dates || [])].map(String);
+    const daySetting = data.days?.[today];
+
+    const isClosed = closedValues.includes(today) || data.closed === true || data.isClosed === true ||
+                     daySetting === true || daySetting === "true" || daySetting?.closed || daySetting?.isClosed || daySetting?.rest || daySetting?.restDay;
+
+    if (isClosed) return { allowed: false, message: "Today is Rest Day.", reason: "rest" };
+    if (isSunday) return { allowed: false, message: "Today is Sunday.", reason: "sunday" };
+
+    return { allowed: true, message: "", reason: "normal" };
+  } catch (error) {
+    console.error("Calendar status error:", error);
+    return isSunday ? { allowed: false, message: "Today is Sunday.", reason: "sunday" } : { allowed: true, message: "", reason: "calendar-error" };
+  }
+}
+
+/* =========================================================
+   CCUS - RECHARGE LEVELS + UPGRADE DEPOSIT
+========================================================= */
+
+function normalizeRechargeLevel(id, data = {}) {
+  const amount = Number(data.amount ?? data.depositAmount ?? data.price ?? 0);
+
+  return {
+    id: String(id || ""),
+    amount,
+    depositAmount: amount,
+    level: data.level || data.name || data.displayName || `Level ${id}`,
+    commission: Number(data.commission ?? data.referralCommission ?? 0),
+    order: Number(data.order ?? 9999),
+    taskLimit: Math.max(0, Math.floor(Number(data.taskLimit ?? data.dailyTaskLimit ?? 0))),
+    active: data.active !== false
+  };
+}
+
+function loadRechargeLevels() {
+  const container = $("rechargeAmountList");
   if (!container) return;
 
-  if (unsubs.withdrawLevels) unsubs.withdrawLevels();
+  stopListener("rechargeLevels");
 
-  unsubs.withdrawLevels = onSnapshot(
-    collection(db, "withdrawLevels"),
-    snap => {
-      withdrawLevels = [];
-      snap.forEach(d => {
-        const data = d.data() || {};
-        const amount = Number(data.amount || 0);
-        if (data.active !== false && amount > 0) {
-          withdrawLevels.push({ id: d.id, amount, order: Number(data.order ?? 9999) });
+  unsubs.rechargeLevels = onSnapshot(
+    collection(db, "rechargeLevels"),
+    snapshot => {
+      rechargeLevels = [];
+      snapshot.forEach(docSnap => {
+        const level = normalizeRechargeLevel(docSnap.id, docSnap.data() || {});
+        if (level.active && level.amount > 0) {
+          rechargeLevels.push(level);
         }
       });
-      withdrawLevels.sort((a, b) => a.order - b.order);
-      renderWithdrawLevels();
+
+      rechargeLevels.sort((a, b) => Number(a.amount) - Number(b.amount) || Number(a.order) - Number(b.order));
+
+      renderRechargeLevels(rechargeLevels);
+
+      if (typeof window.renderTeamDepositLevels === "function") {
+        window.renderTeamDepositLevels(rechargeLevels);
+      }
+
+      loadUpgradeDeposit();
     },
-    err => {
-      console.error("Withdraw levels listener error:", err);
-      container.innerHTML = `<p style="text-align:center;color:#c62828;">Unable to load withdrawal options.</p>`;
+    error => {
+      console.error("Recharge levels error:", error);
+      container.innerHTML = `<p style="text-align:center;color:#c62828;">Unable to load recharge options.</p>`;
     }
   );
 }
 
-// --- Render Withdrawal Levels ---
+function renderRechargeLevels(levels = rechargeLevels) {
+  const container = $("rechargeAmountList");
+  if (!container) return;
+
+  if (!Array.isArray(levels) || !levels.length) {
+    container.innerHTML = `<p style="text-align:center;color:#777;padding:12px;">No recharge levels available.</p>`;
+    return;
+  }
+
+  container.innerHTML = "";
+
+  levels.forEach(level => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "amount-btn";
+    button.innerHTML = `<strong>${money(level.amount)} ETB</strong>`;
+
+    button.onclick = () => {
+      selectedRechargeAmount = Number(level.amount);
+      selectedRechargeLevel = {
+        ...level,
+        isUpgrade: false,
+        targetLevelId: level.id,
+        targetLevel: level.level,
+        targetLevelAmount: Number(level.amount)
+      };
+
+      if ($("rechargeAmount")) {
+        $("rechargeAmount").value = Number(level.amount);
+      }
+
+      container.querySelectorAll(".amount-btn").forEach(btn => btn.classList.remove("active"));
+      button.classList.add("active");
+    };
+
+    container.appendChild(button);
+  });
+}
+
+async function getApprovedRechargeRecordsForUpgrade(userId = currentUser?.uid) {
+  if (!userId) return [];
+
+  try {
+    const snapshot = await getDocs(
+      query(collection(db, "rechargeRequests"), where("userId", "==", userId), where("status", "==", "approved"))
+    );
+    return snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+  } catch (error) {
+    console.error("Approved recharge records error:", error);
+    return [];
+  }
+}
+
+async function getUserApprovedRechargeTotal(userId = currentUser?.uid) {
+  const records = await getApprovedRechargeRecordsForUpgrade(userId);
+  let total = 0;
+
+  records.forEach(record => {
+    const isUpgrade = record.isUpgrade === true || String(record.isUpgrade).toLowerCase() === "true";
+    let amount = isUpgrade
+      ? Number(record.upgradeAmount ?? record.amount ?? record.depositAmount ?? 0)
+      : Number(record.amount ?? record.depositAmount ?? record.rechargeAmount ?? 0);
+
+    if (Number.isFinite(amount) && amount > 0) {
+      total += amount;
+    }
+  });
+
+  return total;
+}
+
+function getCurrentRechargeLevelFromTotal(approvedTotal, levels = rechargeLevels) {
+  if (!Array.isArray(levels) || !levels.length) return null;
+
+  const total = Number(approvedTotal) || 0;
+  const sorted = [...levels]
+    .filter(level => level.active !== false && Number(level.amount) > 0)
+    .sort((a, b) => Number(a.amount) - Number(b.amount));
+
+  let currentLevel = null;
+  sorted.forEach(level => {
+    if (total >= Number(level.amount)) {
+      currentLevel = level;
+    }
+  });
+
+  return currentLevel;
+}
+
+function getNextRechargeLevelFromCurrentLevel(currentLevel, levels = rechargeLevels) {
+  if (!Array.isArray(levels) || !levels.length) return null;
+
+  const sorted = [...levels]
+    .filter(level => level.active !== false && Number(level.amount) > 0)
+    .sort((a, b) => Number(a.amount) - Number(b.amount));
+
+  if (!currentLevel) return sorted[0] || null;
+
+  const currentAmount = Number(currentLevel.amount) || 0;
+  return sorted.find(level => Number(level.amount) > currentAmount) || null;
+}
+
+function getUpgradeDepositInfo(approvedTotal, levels = rechargeLevels) {
+  const total = Number(approvedTotal) || 0;
+  const currentLevel = getCurrentRechargeLevelFromTotal(total, levels);
+  const nextLevel = getNextRechargeLevelFromCurrentLevel(currentLevel, levels);
+
+  if (!nextLevel) {
+    return { approvedTotal: total, currentLevel, nextLevel: null, upgradeAmount: 0, isMaximum: true };
+  }
+
+  let upgradeAmount = currentLevel
+    ? Math.max(0, Number(nextLevel.amount) - Number(currentLevel.amount))
+    : Number(nextLevel.amount);
+
+  return { approvedTotal: total, currentLevel, nextLevel, upgradeAmount, isMaximum: false };
+}
+
+async function loadUpgradeDeposit() {
+  const containers = [$("upgradeDepositContainer"), $("upgradeDeposit"), $("rechargeUpgradeContainer")].filter(Boolean);
+  if (!containers.length) return;
+
+  if (!currentUser) {
+    containers.forEach(container => { container.innerHTML = ""; });
+    return;
+  }
+
+  try {
+    const approvedTotal = await getUserApprovedRechargeTotal(currentUser.uid);
+    const info = getUpgradeDepositInfo(approvedTotal, rechargeLevels);
+
+    if (info.isMaximum) {
+      containers.forEach(container => {
+        const currentLabel = info.currentLevel ? String(info.currentLevel.level) : "No Level";
+        container.innerHTML = `
+          <div style="padding:15px;border:1px solid #ddd;border-radius:12px;text-align:center;">
+            <strong>Maximum Level Reached</strong>
+            <div style="margin-top:6px;color:#777;font-size:13px;">
+              Current Level: ${escapeHtml(currentLabel)}
+            </div>
+          </div>`;
+      });
+      return;
+    }
+
+    const currentLabel = info.currentLevel ? String(info.currentLevel.level) : "No Level";
+    const nextLabel = String(info.nextLevel.level);
+
+    containers.forEach((container, index) => {
+      const buttonId = `ccusUpgradeDepositBtn_${index}`;
+      container.innerHTML = `
+        <div class="simple-card" style="margin-top:12px;padding:15px;border:1px solid #f0a500;border-radius:12px;background:#fffaf0;">
+          <div style="font-weight:800;font-size:16px;">⬆️ Upgrade Deposit</div>
+          <div style="margin-top:8px;font-size:13px;color:#666;">
+            Current Level: <strong>${escapeHtml(currentLabel)}</strong>
+          </div>
+          <div style="margin-top:10px;font-size:13px;color:#666;">
+            Next Level: <strong>${escapeHtml(nextLabel)}</strong> · ETB ${money(info.nextLevel.amount)}
+          </div>
+          <div style="margin-top:12px;font-size:20px;font-weight:900;color:#d88900;">
+            Upgrade Deposit: ETB ${money(info.upgradeAmount)}
+          </div>
+          <button type="button" class="primary-btn upgrade-deposit-btn" style="width:100%;margin-top:12px;" id="${buttonId}">
+            ⬆️ Upgrade to ${escapeHtml(nextLabel)}
+          </button>
+          <p class="upgradeDepositMessage" style="margin-top:8px;font-size:12px;text-align:center;"></p>
+        </div>`;
+
+      const button = container.querySelector(`#${buttonId}`);
+      if (button) {
+        button.onclick = () => selectUpgradeDeposit(info);
+      }
+    });
+  } catch (error) {
+    console.error("Upgrade deposit error:", error);
+    containers.forEach(container => {
+      container.innerHTML = `<p style="text-align:center;color:#c62828;">Unable to load upgrade option.</p>`;
+    });
+  }
+}
+
+function selectUpgradeDeposit(info) {
+  if (!info || !info.nextLevel || Number(info.upgradeAmount) <= 0) return;
+
+  const upgradeAmount = Number(info.upgradeAmount);
+  const targetLevelAmount = Number(info.nextLevel.amount);
+
+  if (!Number.isFinite(upgradeAmount) || upgradeAmount <= 0) return;
+
+  selectedRechargeAmount = upgradeAmount;
+  selectedRechargeLevel = {
+    ...info.nextLevel,
+    isUpgrade: true,
+    upgradeAmount,
+    targetLevelId: info.nextLevel.id,
+    targetLevel: info.nextLevel.level,
+    targetLevelAmount,
+    currentLevelId: info.currentLevel?.id || "",
+    currentLevel: info.currentLevel?.level || "No Level",
+    currentApprovedTotal: Number(info.approvedTotal) || 0
+  };
+
+  if ($("rechargeAmount")) {
+    $("rechargeAmount").value = upgradeAmount;
+  }
+
+  showElement("rechargeStep1");
+  hideElement("rechargeStep2");
+  hideElement("rechargeStep3");
+  hideElement("rechargePending");
+
+  const form = $("rechargeStep1");
+  if (form) {
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+window.resetRechargePage = function () {
+  selectedRechargeAmount = 0;
+  selectedRechargeLevel = null;
+  selectedDepositPaymentMethod = null;
+
+  showElement("rechargeStep1");
+  hideElement("rechargeStep2");
+  hideElement("rechargeStep3");
+  hideElement("rechargePending");
+
+  if ($("rechargeAmount")) $("rechargeAmount").value = "";
+  if ($("transactionId")) $("transactionId").value = "";
+
+  if (typeof loadUpgradeDeposit === "function") {
+    loadUpgradeDeposit();
+  }
+};
+
+/* =========================================================
+   PAYMENT METHODS & STEPS
+========================================================= */
+
+function loadUserPaymentMethods() {
+  const container = $("depositPaymentMethods");
+  if (!container) return;
+
+  stopListener("userPaymentMethods");
+
+  unsubs.userPaymentMethods = onSnapshot(
+    collection(db, "settings", "paymentMethods", "methods"),
+    snapshot => {
+      userPaymentMethods = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data() || {};
+        if (data.active !== false) {
+          userPaymentMethods.push({
+            id: docSnap.id,
+            ...data,
+            name: data.name || "Payment"
+          });
+        }
+      });
+
+      userPaymentMethods.sort((a, b) => Number(a.order ?? 9999) - Number(b.order ?? 9999));
+      renderPaymentMethods();
+    },
+    error => {
+      console.error("Payment method error:", error);
+      container.innerHTML = `<p style="text-align:center;color:#c62828;">Unable to load payment methods.</p>`;
+    }
+  );
+}
+
+function renderPaymentMethods() {
+  const container = $("depositPaymentMethods");
+  if (!container) return;
+
+  if (!userPaymentMethods.length) {
+    container.innerHTML = `<p style="text-align:center;color:#777;">No payment methods available.</p>`;
+    return;
+  }
+
+  container.innerHTML = "";
+
+  userPaymentMethods.forEach(method => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "payment-method-btn";
+    button.style.cssText = "width:100%;padding:10px;margin-bottom:8px;border:1px solid #ccc;border-radius:6px;background:#fff;";
+    button.textContent = method.name;
+
+    button.onclick = () => {
+      selectedDepositPaymentMethod = method;
+      container.querySelectorAll(".payment-method-btn").forEach(btn => btn.classList.remove("active"));
+      button.classList.add("active");
+    };
+
+    container.appendChild(button);
+  });
+}
+
+window.goToPaymentMethod = function () {
+  const amount = Number($("rechargeAmount")?.value || 0);
+
+  if (amount > 0) {
+    selectedRechargeAmount = amount;
+    if (selectedRechargeLevel && selectedRechargeLevel.isUpgrade) {
+      selectedRechargeAmount = amount;
+    } else {
+      selectedRechargeLevel = rechargeLevels.find(level => Number(level.amount) === Number(amount)) || null;
+      if (!selectedRechargeLevel) {
+        return alert("Please select a valid recharge level.");
+      }
+    }
+  }
+
+  if (selectedRechargeAmount <= 0) {
+    return alert("Please select or enter a valid amount.");
+  }
+
+  setText("transferAmount", `ETB ${money(selectedRechargeAmount)}`);
+  hideElement("rechargeStep1");
+  showElement("rechargeStep2");
+  loadUserPaymentMethods();
+};
+
+window.goToPaymentDetails = function () {
+  if (!selectedDepositPaymentMethod) {
+    return alert("Please select a payment method.");
+  }
+
+  setText("finalPaymentMethod", selectedDepositPaymentMethod.name);
+  setText("finalAccountName", selectedDepositPaymentMethod.accountName || "—");
+  setText("finalAccountNumber", selectedDepositPaymentMethod.accountNumber || "—");
+  setText("finalTransferAmount", `ETB ${money(selectedRechargeAmount)}`);
+
+  hideElement("rechargeStep2");
+  showElement("rechargeStep3");
+};
+
+window.backToAmountStep = function () {
+  hideElement("rechargeStep2");
+  showElement("rechargeStep1");
+};
+
+window.backToPaymentMethod = function () {
+  hideElement("rechargeStep3");
+  showElement("rechargeStep2");
+};
+
+/* =========================================================
+   SUBMIT RECHARGE
+========================================================= */
+
+window.submitRecharge = async function () {
+  if (!currentUser || window._ccusRechargeSubmitting) return;
+
+  const transactionId = $("transactionId")?.value?.trim();
+  if (!transactionId) {
+    return alert("Please enter Transaction ID.");
+  }
+
+  if (selectedRechargeAmount <= 0 || !selectedDepositPaymentMethod) {
+    return alert("Invalid amount or payment method.");
+  }
+
+  window._ccusRechargeSubmitting = true;
+
+  try {
+    let amount = Number(selectedRechargeAmount);
+    const isUpgrade = selectedRechargeLevel?.isUpgrade === true;
+    let level = null;
+
+    if (!isUpgrade) {
+      level = rechargeLevels.find(item => Number(item.amount) === amount);
+      if (!level) throw new Error("Selected recharge level was not found.");
+    }
+
+    if (isUpgrade) {
+      const approvedTotal = await getUserApprovedRechargeTotal(currentUser.uid);
+      const freshInfo = getUpgradeDepositInfo(approvedTotal, rechargeLevels);
+
+      if (freshInfo.isMaximum || !freshInfo.nextLevel) {
+        throw new Error("You are already at the maximum level.");
+      }
+
+      level = freshInfo.nextLevel;
+      const expectedUpgradeAmount = Number(level.amount) - Number(freshInfo.currentLevel?.amount || 0);
+      const finalUpgradeAmount = freshInfo.currentLevel ? expectedUpgradeAmount : Number(level.amount);
+
+      amount = Number($("rechargeAmount")?.value || selectedRechargeAmount || 0);
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("Invalid upgrade amount.");
+      }
+
+      if (Math.abs(amount - finalUpgradeAmount) > 0.001) {
+        throw new Error(`Upgrade amount must be ETB ${money(finalUpgradeAmount)}`);
+      }
+
+      selectedRechargeAmount = finalUpgradeAmount;
+      selectedRechargeLevel = {
+        ...level,
+        isUpgrade: true,
+        upgradeAmount: finalUpgradeAmount,
+        targetLevelId: level.id,
+        targetLevel: level.level,
+        targetLevelAmount: Number(level.amount),
+        currentLevelId: freshInfo.currentLevel?.id || "",
+        currentLevel: freshInfo.currentLevel?.level || "No Level",
+        currentApprovedTotal: approvedTotal
+      };
+    }
+
+    const requestData = {
+      userId: currentUser.uid,
+      userEmail: currentUser.email || "",
+      userName: currentUserData?.fullName || currentUser.displayName || "",
+      amount,
+      depositAmount: amount,
+      rechargeLevelId: level?.id || "",
+      depositLevel: level?.level || "General Deposit",
+      levelName: level?.level || "General Deposit",
+      commissionAmount: Number(level?.commission || 0),
+      paymentMethod: selectedDepositPaymentMethod.name,
+      paymentMethodId: selectedDepositPaymentMethod.id || "",
+      accountName: selectedDepositPaymentMethod.accountName || "",
+      accountNumber: selectedDepositPaymentMethod.accountNumber || "",
+      transactionId,
+      status: "pending",
+      createdAt: serverTimestamp()
+    };
+
+    if (isUpgrade) {
+      requestData.isUpgrade = true;
+      requestData.upgradeFromLevel = selectedRechargeLevel.currentLevel || "No Level";
+      requestData.upgradeFromAmount = Number(selectedRechargeLevel.currentApprovedTotal || 0);
+      requestData.targetLevelId = level.id;
+      requestData.targetLevel = level.level;
+      requestData.targetLevelAmount = Number(level.amount);
+      requestData.upgradeAmount = Number(amount);
+    } else {
+      requestData.isUpgrade = false;
+    }
+
+    await addDoc(collection(db, "rechargeRequests"), requestData);
+
+    hideElement("rechargeStep3");
+    showElement("rechargePending");
+
+    if ($("transactionId")) {
+      $("transactionId").value = "";
+    }
+  } catch (error) {
+    console.error("Submit recharge error:", error);
+    alert(error?.message || firebaseErrorMessage(error));
+  } finally {
+    window._ccusRechargeSubmitting = false;
+  }
+};
+
+/* =========================================================
+   RECHARGE HISTORY
+========================================================= */
+
+function loadRechargeHistory() {
+  const container = $("rechargeHistory");
+  if (!container || !currentUser) return;
+
+  stopListener("rechargeHistory");
+
+  unsubs.rechargeHistory = onSnapshot(
+    query(collection(db, "rechargeRequests"), where("userId", "==", currentUser.uid)),
+    snapshot => {
+      const records = [];
+      snapshot.forEach(docSnap => {
+        records.push({ id: docSnap.id, ...docSnap.data() });
+      });
+
+      records.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
+      renderRechargeHistory(records);
+    },
+    error => {
+      console.error("Recharge history error:", error);
+      container.innerHTML = `<div class="empty-transactions"><h3>Unable to load recharge history</h3></div>`;
+    }
+  );
+}
+
+function getStatusIcon(status) {
+  switch (String(status || "").toLowerCase()) {
+    case "approved": return "🟢";
+    case "rejected": return "🔴";
+    default: return "🟡";
+  }
+}
+
+function renderRechargeHistory(records) {
+  const container = $("rechargeHistory");
+  if (!container) return;
+
+  if (!records.length) {
+    container.innerHTML = `<div class="empty-transactions"><h3>No recharge records found</h3></div>`;
+    return;
+  }
+
+  container.innerHTML = records.map(record => {
+    const status = String(record.status || "pending").toLowerCase();
+    const isUpgrade = record.isUpgrade === true || String(record.isUpgrade).toLowerCase() === "true";
+
+    const displayAmount = isUpgrade
+      ? Number(record.upgradeAmount ?? record.amount ?? record.depositAmount ?? 0)
+      : Number(record.amount ?? record.depositAmount ?? 0);
+
+    const displayLevel = isUpgrade
+      ? (record.targetLevel || record.depositLevel || "Upgrade")
+      : (record.depositLevel || record.levelName || "—");
+
+    return `
+      <div class="history-item ${escapeHtml(status)}">
+        <div class="history-info">
+          <strong>${isUpgrade ? "Upgrade to" : "Level"} : ${escapeHtml(String(displayLevel))}</strong>
+          <span>Ref: ${escapeHtml(record.transactionId || "—")}${isUpgrade ? " · Upgrade" : ""}</span>
+        </div>
+        <div class="history-right">
+          <strong>ETB ${money(displayAmount)}</strong>
+          <span class="history-status ${escapeHtml(status)}">
+            ${getStatusIcon(status)} ${escapeHtml(status)}
+          </span>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+window.checkCCUSUpgradeLevels = function () {
+  const levels = [...rechargeLevels]
+    .filter(level => level.active !== false && Number(level.amount) > 0)
+    .sort((a, b) => Number(a.amount) - Number(b.amount));
+
+  const result = [];
+  for (let i = 0; i < levels.length - 1; i++) {
+    const current = Number(levels[i].amount);
+    const next = Number(levels[i + 1].amount);
+    result.push({
+      from: levels[i].level,
+      to: levels[i + 1].level,
+      currentAmount: current,
+      nextAmount: next,
+      upgradeAmount: next - current
+    });
+  }
+
+  console.table(result);
+  return result;
+};
+
+/* =========================================================
+   WITHDRAW LEVELS & HISTORY
+========================================================= */
+
+function loadWithdrawLevels() {
+  const container = $("withdrawAmountList");
+  if (!container) return;
+  stopListener("withdrawLevels");
+
+  unsubs.withdrawLevels = onSnapshot(collection(db, "withdrawLevels"), snapshot => {
+    withdrawLevels = [];
+    snapshot.forEach(docSnap => {
+      const data = docSnap.data() || {};
+      const amount = Number(data.amount || 0);
+      if (data.active !== false && Number.isFinite(amount) && amount > 0) {
+        withdrawLevels.push({ id: docSnap.id, amount, order: Number(data.order ?? 9999) });
+      }
+    });
+    withdrawLevels.sort((a, b) => a.order - b.order || a.amount - b.amount);
+    renderWithdrawLevels();
+  }, error => {
+    console.error("Withdraw levels error:", error);
+    container.innerHTML = `<p style="text-align:center;color:#c62828;">Unable to load withdrawal options.</p>`;
+  });
+}
+
 function renderWithdrawLevels() {
   const container = $("withdrawAmountList");
   if (!container) return;
-
-  if (!withdrawLevels?.length) {
+  if (!withdrawLevels.length) {
     container.innerHTML = `<p style="text-align:center;color:#777;">No withdrawal options available.</p>`;
     return;
   }
 
   container.innerHTML = "";
-  withdrawLevels.forEach(lvl => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "amount-btn";
-    btn.textContent = `ETB ${money(lvl.amount)}`;
+  withdrawLevels.forEach(level => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "amount-btn";
+    button.textContent = `ETB ${money(level.amount)}`;
 
-    btn.onclick = async () => {
-      if (!(await checkWithdrawalAllowed())) return;
-
-      selectedWithdrawAmount = lvl.amount;
-      if ($("withdrawAmount")) $("withdrawAmount").value = lvl.amount;
-
-      container.querySelectorAll(".amount-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
+    button.onclick = async () => {
+      if (!await checkWithdrawalAllowed()) return;
+      selectedWithdrawAmount = level.amount;
+      if ($("withdrawAmount")) $("withdrawAmount").value = level.amount;
+      container.querySelectorAll(".amount-btn").forEach(btn => btn.classList.remove("active"));
+      button.classList.add("active");
     };
-
-    container.appendChild(btn);
+    container.appendChild(button);
   });
 }
 
-// --- Reset Page ---
-function resetWithdrawPage() {
+window.resetWithdrawPage = function () {
   selectedWithdrawAmount = 0;
   if ($("withdrawAmount")) $("withdrawAmount").value = "";
   if ($("withdrawPassword")) $("withdrawPassword").value = "";
   hideElement("withdrawPending");
-}
+  document.querySelectorAll("#withdrawAmountList .amount-btn").forEach(btn => btn.classList.remove("active"));
+};
 
-// --- Submit Withdrawal ---
-window.submitWithdraw = async () => {
+window.submitWithdraw = async function () {
   if (!currentUser || window._ccusWithdrawSubmitting) return;
+  if (!await checkWithdrawalAllowed()) return;
 
-  if (!(await checkWithdrawalAllowed())) return;
+  const amount = Number($("withdrawAmount")?.value || selectedWithdrawAmount || 0);
+  const password = $("withdrawPassword")?.value?.trim() || "";
 
-  const amt = Number($("withdrawAmount")?.value || selectedWithdrawAmount);
-  const pwd = $("withdrawPassword")?.value?.trim();
-
-  if (amt <= 0 || !pwd) {
-    return showMessage(amt <= 0 ? "Enter valid withdrawal amount." : "Enter your password.");
-  }
+  if (!Number.isFinite(amount) || amount <= 0) return showMessage("Enter a valid withdrawal amount.");
+  if (!password) return showMessage("Enter your password.");
 
   window._ccusWithdrawSubmitting = true;
 
   try {
-    if (!currentUser.email) {
-      throw new Error("Email authentication is required for withdrawal.");
-    }
+    if (!currentUser.email) throw new Error("Email authentication is required for withdrawal.");
 
-    await reauthenticateWithCredential(
-      currentUser,
-      EmailAuthProvider.credential(currentUser.email, pwd)
-    );
+    await reauthenticateWithCredential(currentUser, EmailAuthProvider.credential(currentUser.email, password));
 
     const userRef = doc(db, "users", currentUser.uid);
     const withdrawRef = doc(collection(db, "withdrawRequests"));
 
     await runTransaction(db, async transaction => {
-      const uSnap = await transaction.get(userRef);
-      if (!uSnap.exists()) throw new Error("User profile not found.");
+      const userSnap = await transaction.get(userRef);
+      if (!userSnap.exists()) throw new Error("User profile not found.");
 
-      const uData = uSnap.data() || {};
-      const bal = Number(uData.totalBalance || 0);
+      const userData = userSnap.data() || {};
+      const balance = Number(userData.totalBalance || 0);
 
-      if (amt > bal) throw new Error("Insufficient balance.");
+      if (amount > balance) throw new Error(`Insufficient balance. Your balance is ETB ${money(balance)}.`);
 
-      // Deduct balance & create request
-      transaction.update(userRef, {
-        totalBalance: bal - amt,
-        updatedAt: serverTimestamp()
-      });
-
+      transaction.update(userRef, { totalBalance: balance - amount, updatedAt: serverTimestamp() });
       transaction.set(withdrawRef, {
         userId: currentUser.uid,
         userEmail: currentUser.email || "",
-        userName: uData.fullName || "",
-        amount: amt,
-        paymentMethod: uData.withdrawPaymentMethod || "Standard",
-        accountNumber: uData.accountNumber || uData.withdrawAccountNumber || "",
+        userName: userData.fullName || "",
+        amount,
+        paymentMethod: userData.withdrawPaymentMethod || "Standard",
+        accountNumber: userData.withdrawAccountNumber || userData.accountNumber || "",
         status: "pending",
         balanceDeducted: true,
-        createdAt: serverTimestamp()
+        refundProcessed: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       });
     });
 
     showElement("withdrawPending");
-    updateUserUI();
-  } catch (err) {
-    console.error("Withdrawal submission error:", err);
-    showMessage(firebaseErrorMessage(err));
+    window.resetWithdrawPage();
+    await updateUserUI();
+  } catch (error) {
+    console.error("Withdrawal submission error:", error);
+    showMessage(firebaseErrorMessage(error));
   } finally {
     window._ccusWithdrawSubmitting = false;
   }
 };
 
-// --- Load Withdrawal History ---
 function loadWithdrawHistory() {
   const container = $("withdrawHistory");
   if (!container || !currentUser) return;
-
-  if (unsubs.withdrawHistory) unsubs.withdrawHistory();
+  stopListener("withdrawHistory");
 
   unsubs.withdrawHistory = onSnapshot(
     query(collection(db, "withdrawRequests"), where("userId", "==", currentUser.uid)),
-    snap => {
-      const recs = [];
-      snap.forEach(d => recs.push({ id: d.id, ...d.data() }));
-      recs.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
-      renderWithdrawHistory(recs);
+    snapshot => {
+      const records = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      records.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
+      renderWithdrawHistory(records);
     },
-    err => {
-      console.error("Withdraw history listener error:", err);
+    error => {
+      console.error("Withdraw history error:", error);
       container.innerHTML = `<div class="empty-transactions"><h3>Unable to load withdrawal history</h3></div>`;
     }
   );
 }
 
-// --- Render Withdrawal History ---
-function renderWithdrawHistory(recs) {
+function renderWithdrawHistory(records) {
   const container = $("withdrawHistory");
   if (!container) return;
-
-  if (!recs?.length) {
+  if (!records.length) {
     container.innerHTML = `<div class="empty-transactions"><h3>No withdrawal transactions found</h3></div>`;
     return;
   }
 
-  container.innerHTML = recs.map(r => {
-    const status = String(r.status || "pending").toLowerCase();
-    const escStatus = escapeHtml(status);
-
+  container.innerHTML = records.map(record => {
+    const status = String(record.status || "pending").toLowerCase();
     return `
-      <div class="history-item ${escStatus}">
+      <div class="history-item ${escapeHtml(status)}">
         <div class="history-info">
           <strong>Withdrawal Request</strong>
-          <span>Method: ${escapeHtml(r.paymentMethod || "Standard")}</span>
+          <span>Method: ${escapeHtml(record.paymentMethod || "Standard")}</span>
         </div>
         <div class="history-right">
-          <strong>ETB ${money(r.amount)}</strong>
-          <span class="history-status ${escStatus}">${escStatus}</span>
+          <strong>ETB ${money(record.amount)}</strong>
+          <span class="history-status ${escapeHtml(status)}">
+            ${getStatusIcon(status)} ${escapeHtml(status)}
+          </span>
         </div>
-      </div>
-    `;
-  }).join("");
-}
-
-/* VIP System */
-function normalizeVIPLevel(id, data = {}) {
-  const price = Number(data.price ?? data.amount ?? data.requiredDeposit ?? 0);
-  const profit = Number(data.profit ?? data.reward ?? data.returnProfit ?? 0);
-  const validDays = Number(data.validDays ?? data.durationDays ?? data.days ?? 0);
-  const order = Number(data.order ?? data.displayOrder ?? data.level ?? 9999);
-  const name = data.displayName || data.name || (data.level !== undefined ? `VIP ${data.level}` : "VIP");
-  return { id: id || data.id || "", name: String(name), displayName: String(name), price, profit, validDays, order, active: data.active !== false };
-}
-
-function loadVIPLevels() {
-  const container = document.querySelector(".vip-container");
-  if (!container) return;
-  if (unsubs.vipLevels) { unsubs.vipLevels(); unsubs.vipLevels = null; }
-  container.innerHTML = `<div style="text-align:center;padding:25px;color:#777;">Loading VIP Levels...</div>`;
-
-  try {
-    unsubs.vipLevels = onSnapshot(collection(db, "vip_levels"), snapshot => {
-      const levels = [];
-      snapshot.forEach(docSnap => {
-        const level = normalizeVIPLevel(docSnap.id, docSnap.data());
-        if (level.active !== false && level.price > 0 && level.validDays > 0 && level.profit >= 0) levels.push(level);
-      });
-      levels.sort((a, b) => a.order !== b.order ? a.order - b.order : a.price - b.price);
-      vipLevelsList = levels;
-      renderVIPLevels(levels); checkAndProcessVIPPayouts();
-    }, error => {
-      container.innerHTML = `<div style="text-align:center;padding:25px;"><h3>Unable to Load VIP Levels</h3></div>`;
-    });
-  } catch (error) { console.error("VIP Levels setup error:", error); }
-}
-
-function renderVIPLevels(levels) {
-  const container = document.querySelector(".vip-container");
-  if (!container) return;
-  if (!Array.isArray(levels) || !levels.length) {
-    container.innerHTML = `<div style="text-align:center;padding:25px;color:#666;"><h3>No VIP Packages Available</h3></div>`;
-    renderCompanySalaryStructure(); return;
-  }
-  const currentVIP = String(currentUserData?.vipLevel || "VIP 0");
-
-  container.innerHTML = levels.map((vip, index) => {
-    const isCurrent = currentVIP === vip.name || currentVIP === vip.displayName;
-    return `
-      <div class="simple-card vip-card" data-vip-id="${escapeHtml(vip.id)}" style="border:1px solid #f0a500;margin-bottom:15px;padding:15px;border-radius:12px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.05);">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;">
-          <div><h3 style="margin:0;color:#f0a500;font-size:17px;">👑 ${escapeHtml(vip.name)}</h3><div style="margin-top:3px;color:#777;font-size:12px;">VIP Level ${index + 1}</div></div>
-          <span style="font-weight:bold;background:#fff3cd;color:#856404;padding:5px 10px;border-radius:15px;white-space:nowrap;">ETB ${money(vip.price)}</span>
-        </div>
-        <hr style="border:0;border-top:1px solid #eee;margin:10px 0;"/>
-        <div style="font-size:.95rem;line-height:1.7;">
-          <p style="margin:4px 0;"><strong>Package Price:</strong> ETB ${money(vip.price)}</p>
-          <p style="margin:4px 0;"><strong>Profit:</strong> ETB ${money(vip.profit)}</p>
-          <p style="margin:4px 0;"><strong>Validity:</strong> ${Number(vip.validDays)} Days</p>
-          <p style="margin:4px 0;font-weight:bold;"><strong>Total Return:</strong> ETB ${money(vip.price + vip.profit)}</p>
-        </div>
-        <button type="button" class="primary-btn buy-vip-btn" data-vip-id="${escapeHtml(vip.id)}" style="margin-top:12px;width:100%;padding:11px;font-weight:bold;border-radius:8px;" ${isCurrent ? "disabled" : ""}>
-          ${isCurrent ? "Current Active VIP" : "Purchase"}
-        </button>
       </div>`;
   }).join("");
-
-  container.querySelectorAll(".buy-vip-btn:not([disabled])").forEach(button => {
-    button.onclick = async () => {
-      const vip = levels.find(item => item.id === button.dataset.vipId);
-      if (vip) await window.buyVIP(vip.id, vip.name, vip.price, vip.profit, vip.validDays);
-    };
-  });
-  renderCompanySalaryStructure();
-}
-
-window.buyVIP = async function (vipId, vipName, price, profit, validDays) {
-  if (!currentUser || window._ccusVipSubmitting) return;
-  window._ccusVipSubmitting = true;
-  try {
-    const vipPrice = Number(price || 0), vipProfit = Number(profit || 0), vipValidDays = Number(validDays || 0);
-    if (vipPrice <= 0 || vipValidDays <= 0) throw new Error("Invalid VIP package.");
-
-    const userRef = doc(db, "users", currentUser.uid), vipOrderRef = doc(collection(db, "vip_orders"));
-    await runTransaction(db, async transaction => {
-      const userSnap = await transaction.get(userRef);
-      if (!userSnap.exists()) throw new Error("User account not found.");
-      const userData = userSnap.data() || {}, balance = Number(userData.totalBalance || 0);
-      if (String(userData.vipLevel || "") === String(vipName)) throw new Error("This VIP is already active.");
-      if (balance < vipPrice) throw new Error(`Insufficient balance! Costs ETB ${money(vipPrice)}, balance is ETB ${money(balance)}.`);
-
-      transaction.update(userRef, { totalBalance: balance - vipPrice, vipLevel: vipName, vipUpdatedAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      transaction.set(vipOrderRef, {
-        userId: currentUser.uid, userName: userData.fullName || currentUser.displayName || "User", userEmail: currentUser.email || "",
-        vipId, vipName, price: vipPrice, profit: vipProfit, payoutAmount: vipPrice + vipProfit, validDays: vipValidDays,
-        status: "active", payoutCompleted: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
-      });
-    });
-
-    alert(`Purchased ${vipName} successfully.`);
-    updateUserUI(); loadVIPLevels();
-  } catch (error) { alert(error?.message || "VIP purchase failed."); } 
-  finally { window._ccusVipSubmitting = false; }
-};
-
-async function checkAndProcessVIPPayouts() {
-  if (!currentUser || window._ccusVipPayoutChecking) return;
-  window._ccusVipPayoutChecking = true;
-  try {
-    const snapshot = await getDocs(query(collection(db, "vip_orders"), where("userId", "==", currentUser.uid), where("status", "==", "active"), where("payoutCompleted", "==", false)));
-    for (const orderDoc of snapshot.docs) await processSingleVIPPayout(orderDoc.id);
-  } catch (error) { console.warn("VIP payout check failed:", error?.message || error); } 
-  finally { window._ccusVipPayoutChecking = false; }
-}
-
-async function processSingleVIPPayout(orderId) {
-  if (!currentUser) return;
-  const orderRef = doc(db, "vip_orders", orderId), userRef = doc(db, "users", currentUser.uid);
-  try {
-    const orderSnap = await getDoc(orderRef);
-    if (!orderSnap.exists()) return;
-    const order = orderSnap.data() || {};
-    if (order.payoutCompleted === true || String(order.status || "").toLowerCase() === "cancelled" || !order.createdAt?.toMillis) return;
-    const validDays = Number(order.validDays || 0);
-    if (validDays <= 0 || Date.now() < order.createdAt.toMillis() + (validDays * 24 * 60 * 60 * 1000)) return;
-
-    const payout = Number(order.payoutAmount ?? (Number(order.price || 0) + Number(order.profit || 0)));
-    if (payout <= 0) return;
-
-    await runTransaction(db, async transaction => {
-      const freshOrderSnap = await transaction.get(orderRef);
-      if (!freshOrderSnap.exists()) return;
-      const freshOrder = freshOrderSnap.data() || {};
-      if (freshOrder.payoutCompleted === true || String(freshOrder.status || "").toLowerCase() === "cancelled") return;
-
-      const userSnap = await transaction.get(userRef);
-      if (!userSnap.exists()) return;
-
-      transaction.update(userRef, { totalBalance: Number(userSnap.data()?.totalBalance || 0) + payout, updatedAt: serverTimestamp() });
-      transaction.update(orderRef, { status: "completed", payoutCompleted: true, payoutProcessedAt: serverTimestamp(), updatedAt: serverTimestamp() });
-    });
-    updateUserUI();
-  } catch (error) { console.warn(`VIP payout processing failed (${orderId}):`, error?.message || error); }
-}
-
-const companySalaryLevels = [
-  { level: 1, position: "Team Leader", requirement: "10 A-level employees + 15 ABC level", salary: 2000 },
-  { level: 2, position: "Reserve Manager", requirement: "15 A-level + 50 ABC employees", salary: 6000 },
-  { level: 3, position: "Senior Trainee Manager", requirement: "150+ ABC employees", salary: 15000 },
-  { level: 4, position: "Marketing Manager", requirement: "240+ team members", salary: 25000 },
-  { level: 5, position: "Marketing General Manager", requirement: "550+ team members", salary: 75000 },
-  { level: 6, position: "Regional Manager", requirement: "1,200+ team members", salary: 250000 },
-  { level: 7, position: "Regional General Manager", requirement: "2,000+ team members", salary: 750000 },
-  { level: 8, position: "City Partner", requirement: "3,000+ team members", salary: 1500000 }
-];
-
-function renderCompanySalaryStructure() {
-  const vipContainer = document.querySelector(".vip-container");
-  if (!vipContainer) return;
-  let salaryContainer = $("companySalaryStructure");
-  if (!salaryContainer) {
-    salaryContainer = document.createElement("div");
-    salaryContainer.id = "companySalaryStructure";
-    vipContainer.appendChild(salaryContainer);
-  }
-  salaryContainer.innerHTML = `
-    <div style="margin-top:20px;padding:16px;border-radius:12px;background:#fff;border:1px solid #eee;">
-      <div style="margin-bottom:14px;"><h3 style="margin:0;font-size:18px;">🏢 Company Monthly Salary Structure</h3></div>
-      <div style="width:100%;overflow-x:auto;">
-        <table style="width:100%;min-width:650px;border-collapse:collapse;font-size:13px;">
-          <thead>
-            <tr style="background:#fff3cd;">
-              <th style="padding:10px;border:1px solid #eee;text-align:center;">Level</th>
-              <th style="padding:10px;border:1px solid #eee;text-align:left;">Position</th>
-              <th style="padding:10px;border:1px solid #eee;text-align:left;">Team Requirement</th>
-              <th style="padding:10px;border:1px solid #eee;text-align:right;">Monthly Salary</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${companySalaryLevels.map(item => `
-              <tr>
-                <td style="padding:10px;border:1px solid #eee;text-align:center;font-weight:bold;">${item.level}</td>
-                <td style="padding:10px;border:1px solid #eee;font-weight:600;">${escapeHtml(item.position)}</td>
-                <td style="padding:10px;border:1px solid #eee;">${escapeHtml(item.requirement)}</td>
-                <td style="padding:10px;border:1px solid #eee;text-align:right;font-weight:bold;">ETB ${money(item.salary)}</td>
-              </tr>`).join("")}
-          </tbody>
-        </table>
-      </div>
-    </div>`;
-}
-
-/* Daily Tasks System */
-
-async function loadTaskSettings() {
-  try {
-    const snap = await getDoc(doc(db, "settings", "taskSettings"));
-    const data = snap.exists() ? snap.data() || {} : {};
-
-    const settings = {
-      active: data.active !== false,
-      taskCount: Math.max(0, Math.floor(Number(data.taskCount ?? data.dailyTaskCount ?? 0))),
-      rewardPerTask: Math.max(0, Number(data.rewardPerTask ?? 0))
-    };
-
-    window.taskSettings = settings;
-    return settings;
-  } catch (error) {
-    const fallback = { active: true, taskCount: 0, rewardPerTask: 0 };
-    window.taskSettings = fallback;
-    return fallback;
-  }
-}
-
-async function ensureTaskRechargeLevels() {
-  if (Array.isArray(rechargeLevels) && rechargeLevels.length > 0) return rechargeLevels;
-
-  try {
-    const snap = await getDocs(collection(db, "rechargeLevels"));
-    const levels = [];
-
-    snap.forEach(docSnap => {
-      const data = docSnap.data() || {};
-      const amount = Number(data.amount ?? data.depositAmount ?? 0);
-
-      if (data.active !== false && Number.isFinite(amount) && amount > 0) {
-        levels.push({
-          id: docSnap.id,
-          amount,
-          depositAmount: amount,
-          level: data.level || data.name || `Level ${docSnap.id}`,
-          name: data.name || data.displayName || data.level || `Level ${docSnap.id}`,
-          commission: Number(data.commission ?? 0),
-          order: Number.isFinite(Number(data.order)) ? Number(data.order) : 9999,
-          taskLimit: Math.max(0, Math.floor(Number(data.taskLimit ?? data.dailyTaskLimit ?? 0))),
-          active: true
-        });
-      }
-    });
-
-    rechargeLevels = levels.sort((a, b) => Number(a.amount || 0) - Number(b.amount || 0));
-    return rechargeLevels;
-  } catch (error) {
-    return [];
-  }
-}
-
-async function getApprovedRechargeRecords(userId = currentUser?.uid) {
-  if (!userId) return [];
-  try {
-    const snap = await getDocs(
-      query(
-        collection(db, "rechargeRequests"),
-        where("userId", "==", userId),
-        where("status", "==", "approved")
-      )
-    );
-    return snap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-  } catch (error) {
-    return [];
-  }
-}
-
-async function getApprovedRechargeLevel(userId = currentUser?.uid) {
-  if (!userId) return null;
-
-  const [levels, approved] = await Promise.all([
-    ensureTaskRechargeLevels(),
-    getApprovedRechargeRecords(userId)
-  ]);
-
-  if (!levels.length || !approved.length) return null;
-
-  const matches = approved.map(record => {
-    const levelId = String(record.rechargeLevelId ?? record.levelId ?? "").trim();
-    if (levelId) {
-      const match = levels.find(l => String(l.id) === levelId);
-      if (match) return match;
-    }
-    const amount = Number(record.amount ?? record.depositAmount ?? 0);
-    return Number.isFinite(amount) && amount > 0 ? levels.find(l => Number(l.amount) === amount) : null;
-  }).filter(Boolean);
-
-  if (!matches.length) return null;
-  return matches.sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))[0];
-}
-
-async function getUserDailyTaskLimit(userId = currentUser?.uid) {
-  const level = await getApprovedRechargeLevel(userId);
-  return level ? Math.max(0, Math.floor(Number(level.taskLimit ?? 0))) : 0;
 }
 
 /* =========================================================
-   DAILY TASK OPERATING HOURS (09:00 AM - 09:00 PM)
+   CCUS - VIP SYSTEM
+   STABLE + SECURE TRANSACTION VERSION
 ========================================================= */
 
-async function getSafeTaskOperatingStatus() {
-  const now = new Date();
+/* =========================================================
+   VIP NORMALIZER
+========================================================= */
 
-  if (now.getDay() === 0) {
-    return {
-      allowed: false,
-      isSunday: true,
-      reason: "sunday",
-      message: "Today is Sunday. Tasks cannot be claimed today."
-    };
-  }
+function normalizeVIPLevel(id, data = {}) {
 
-  const currentHour = now.getHours();
-  if (currentHour < 9 || currentHour >= 21) {
-    return {
-      allowed: false,
-      isSunday: false,
-      reason: "outside_task_hours",
-      message: "Daily Tasks are available from 9:00 AM to 9:00 PM only."
-    };
-  }
+  const price = Number(
+    data.price ??
+    data.amount ??
+    data.requiredDeposit ??
+    0
+  );
 
-  if (typeof getTodayOperatingStatus === "function") {
-    try {
-      return await getTodayOperatingStatus();
-    } catch (error) {
-      return { allowed: true, isSunday: false, reason: "normal" };
-    }
-  }
+  const profit = Number(
+    data.profit ??
+    data.reward ??
+    data.returnProfit ??
+    0
+  );
 
-  return { allowed: true, isSunday: false, reason: "normal" };
-}
+  const validDays = Number(
+    data.validDays ??
+    data.durationDays ??
+    data.days ??
+    0
+  );
 
-async function getActiveDailyTasks() {
-  const snap = await getDocs(collection(db, "tasks"));
-  const tasks = [];
+  const order = Number(
+    data.order ??
+    data.displayOrder ??
+    data.level ??
+    9999
+  );
 
-  snap.forEach(docSnap => {
-    const data = docSnap.data() || {};
-    if (data.active !== false) {
-      tasks.push({
-        id: docSnap.id,
-        title: data.title || data.name || "Daily Task",
-        description: data.description || data.message || "",
-        order: Number.isFinite(Number(data.order)) ? Number(data.order) : 9999,
-        reward: Number(data.reward ?? data.rewardAmount ?? window.taskSettings?.rewardPerTask ?? 0)
-      });
-    }
-  });
-
-  return tasks
-    .sort((a, b) => Number(a.order) - Number(b.order))
-    .map((task, index) => ({ ...task, taskNumber: index + 1 }));
-}
-
-async function getTodayTaskClaims(userId = currentUser?.uid) {
-  if (!userId) return new Set();
-  try {
-    const snap = await getDocs(
-      query(
-        collection(db, "users", userId, "taskClaims"),
-        where("date", "==", getLocalDateString())
-      )
+  const name =
+    data.displayName ||
+    data.name ||
+    (
+      data.level !== undefined
+        ? `VIP ${data.level}`
+        : "VIP"
     );
-    const claimedIds = new Set();
-    snap.forEach(docSnap => {
-      if (docSnap.data()?.taskId) claimedIds.add(String(docSnap.data().taskId));
-    });
-    return claimedIds;
-  } catch (error) {
-    return new Set();
-  }
+
+  return {
+    id: String(id || data.id || ""),
+    name: String(name),
+    displayName: String(name),
+    price,
+    profit,
+    validDays,
+    order,
+    active: data.active !== false
+  };
 }
 
-async function loadDailyTasks() {
-  const container = $("taskListContainer");
-  if (!container || !currentUser) return;
 
-  if (!window.dailyTasksCache?.length) {
-    container.innerHTML = `<div style="text-align:center;padding:20px;">Loading daily tasks...</div>`;
-  }
+/* =========================================================
+   LOAD VIP LEVELS
+========================================================= */
 
-  try {
-    const settings = await loadTaskSettings();
-    if (settings.active === false) {
-      container.innerHTML = `
-        <div class="empty-state" style="text-align:center;padding:25px;">
-          <h3>Tasks Currently Unavailable</h3>
-        </div>`;
-      return;
-    }
+function loadVIPLevels() {
 
-    const status = await getSafeTaskOperatingStatus();
-    const isSunday = status?.reason === "sunday" || status?.isSunday === true || new Date().getDay() === 0;
+  const container =
+    document.querySelector(".vip-container");
 
-    let tasks;
-    try {
-      tasks = await getActiveDailyTasks();
-    } catch (error) {
-      if (isTaskAbortError(error)) return;
-      throw error;
-    }
-
-    window.dailyTasksCache = tasks;
-
-    if (!tasks.length) {
-      renderDailyTasks([], 0, isSunday, false);
-      return;
-    }
-
-    if (isSunday) {
-      renderDailyTasks(tasks.map(t => ({ ...t, submitted: false })), tasks.length, true, false);
-      return;
-    }
-
-    const level = await getApprovedRechargeLevel(currentUser.uid);
-
-    if (!level) {
-      renderDailyTasks(tasks.map(t => ({ ...t, submitted: false })), 0, false, true);
-      return;
-    }
-
-    const validDailyLimit = Math.max(0, Math.floor(Number(level.taskLimit ?? 0)));
-    const claimedIds = await getTodayTaskClaims(currentUser.uid);
-
-    const taskStatus = tasks.map(t => ({
-      ...t,
-      submitted: claimedIds.has(String(t.id))
-    }));
-
-    renderDailyTasks(taskStatus, validDailyLimit, false, false);
-  } catch (error) {
-    if (isTaskAbortError(error) || isTaskPermissionError(error)) return;
-    container.innerHTML = `
-      <div class="empty-state" style="text-align:center;padding:25px;">
-        <h3>Unable to Load Tasks</h3>
-      </div>`;
-  }
-}
-
-function renderDailyTasks(tasks, dailyLimit = 0, isSunday = false, noDeposit = false) {
-  const container = $("taskListContainer");
-  if (!container) return;
-
-  if (!Array.isArray(tasks) || !tasks.length) {
-    container.innerHTML = `
-      <div class="empty-state" style="text-align:center;padding:25px;">
-        <h3>No Daily Tasks Available</h3>
-      </div>`;
+  if (!container) {
+    console.warn("⚠️ .vip-container not found.");
     return;
   }
 
-  container.innerHTML = "";
-  let claimedCount = 0;
+  stopListener("vipLevels");
 
-  tasks.forEach((task, index) => {
-    const taskNumber = Number(task.taskNumber || index + 1);
-    const insideLimit = taskNumber <= Number(dailyLimit || 0);
+  container.innerHTML = `
+    <div
+      style="
+        text-align:center;
+        padding:25px;
+        color:#777;
+      "
+    >
+      Loading VIP Levels...
+    </div>
+  `;
 
-    if (task.submitted) claimedCount++;
+  try {
 
-    let buttonHTML = "";
-    let opacityStyle = "";
+    unsubs.vipLevels = onSnapshot(
+      collection(db, "vip_levels"),
 
-    if (isSunday || noDeposit) {
-      buttonHTML = `
-        <button type="button" class="primary-btn task-claim-btn" data-id="${escapeHtml(task.id)}" style="margin-top:8px;width:100%;">
-          ✅ Claim Reward
-        </button>`;
-    } else if (!insideLimit) {
-      opacityStyle = "opacity:.8;";
-      buttonHTML = `
-        <button type="button" class="task-claim-btn" data-id="${escapeHtml(task.id)}" style="margin-top:8px;width:100%;padding:10px;border:0;border-radius:8px;background:#ddd;color:#777;">
-          🔒 Locked
-        </button>`;
-    } else if (task.submitted) {
-      buttonHTML = `
-        <button type="button" disabled style="margin-top:8px;width:100%;padding:10px;border:0;border-radius:8px;background:#ddd;color:#777;">
-          ✓ Completed
-        </button>`;
-    } else {
-      buttonHTML = `
-        <button type="button" class="primary-btn task-claim-btn" data-id="${escapeHtml(task.id)}" style="margin-top:8px;width:100%;">
-          ✅ Claim Reward
-        </button>`;
-    }
+      snapshot => {
 
-    container.insertAdjacentHTML(
-      "beforeend",
-      `
-      <div class="simple-card task-card" style="margin-bottom:12px;padding:14px;border:1px solid #ddd;border-radius:10px;${opacityStyle}">
-        <h3>Task ${taskNumber} ${escapeHtml(task.title)}</h3>
-        <p>${escapeHtml(task.description)}</p>
-        <div>Reward: ETB ${money(task.reward)}</div>
-        ${buttonHTML}
-        <p class="task-message" style="margin-top:7px;"></p>
-      </div>`
-    );
-  });
+        const levels = [];
 
-  container.querySelectorAll(".task-claim-btn").forEach(button => {
-    button.onclick = async () => {
-      const task = tasks.find(item => String(item.id) === String(button.dataset.id));
-      if (task) {
-        await claimTask(task, button, button.parentElement?.querySelector(".task-message"));
+        snapshot.forEach(docSnap => {
+
+          const level =
+            normalizeVIPLevel(
+              docSnap.id,
+              docSnap.data() || {}
+            );
+
+          if (
+            level.active &&
+            level.price > 0 &&
+            level.validDays > 0 &&
+            level.profit >= 0
+          ) {
+            levels.push(level);
+          }
+
+        });
+
+        levels.sort(
+          (a, b) => {
+
+            if (a.order !== b.order) {
+              return a.order - b.order;
+            }
+
+            return a.price - b.price;
+          }
+        );
+
+        vipLevelsList = levels;
+
+        renderVIPLevels(levels);
+      },
+
+      error => {
+
+        console.error(
+          "❌ VIP levels error:",
+          error
+        );
+
+        container.innerHTML = `
+          <div
+            style="
+              text-align:center;
+              padding:25px;
+            "
+          >
+            <h3>
+              Unable to Load VIP Levels
+            </h3>
+
+            <p style="color:#777;">
+              Please try again later.
+            </p>
+          </div>
+        `;
       }
-    };
-  });
+    );
 
-  const summary = $("taskClaimSummary");
-  if (summary) {
-    if (isSunday) {
-      summary.textContent = "Today is Sunday. Tasks cannot be claimed today.";
-    } else if (noDeposit) {
-      summary.textContent = "Approved deposit is required to claim daily tasks.";
-    } else {
-      summary.textContent = `${Math.min(claimedCount, Number(dailyLimit || 0))} / ${Number(dailyLimit || 0)} tasks claimed today`;
-    }
+  } catch (error) {
+
+    console.error(
+      "❌ VIP listener initialization error:",
+      error
+    );
+
+    container.innerHTML = `
+      <div
+        style="
+          text-align:center;
+          padding:25px;
+        "
+      >
+        <h3>
+          Unable to Load VIP Levels
+        </h3>
+      </div>
+    `;
   }
 }
 
-async function claimTask(task, button, messageEl) {
-  if (!currentUser || !task) return;
 
-  const showTaskMessage = msg => {
-    if (messageEl) {
-      messageEl.style.color = "#d9534f";
-      messageEl.textContent = msg;
+/* =========================================================
+   RENDER VIP LEVELS
+========================================================= */
+
+function renderVIPLevels(levels) {
+
+  const container =
+    document.querySelector(".vip-container");
+
+  if (!container) return;
+
+  if (
+    !Array.isArray(levels) ||
+    !levels.length
+  ) {
+
+    container.innerHTML = `
+      <div
+        style="
+          text-align:center;
+          padding:25px;
+          color:#666;
+        "
+      >
+        <h3>
+          No VIP Packages Available
+        </h3>
+      </div>
+    `;
+
+    renderCompanySalaryStructure();
+
+    return;
+  }
+
+  const currentVIP =
+    String(
+      currentUserData?.vipLevel ||
+      "VIP 0"
+    );
+
+  container.innerHTML =
+    levels
+      .map((vip, index) => {
+
+        const isCurrent =
+          currentVIP === vip.name ||
+          currentVIP === vip.displayName;
+
+        return `
+          <div
+            class="simple-card vip-card"
+            data-vip-id="${escapeHtml(vip.id)}"
+            style="
+              border:1px solid #f0a500;
+              margin-bottom:15px;
+              padding:15px;
+              border-radius:12px;
+              background:#fff;
+              box-shadow:
+                0 2px 8px rgba(0,0,0,.05);
+            "
+          >
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                gap:10px;
+                margin-bottom:8px;
+              "
+            >
+
+              <div>
+
+                <h3
+                  style="
+                    margin:0;
+                    color:#f0a500;
+                    font-size:17px;
+                  "
+                >
+                  👑 ${escapeHtml(vip.name)}
+                </h3>
+
+                <div
+                  style="
+                    margin-top:3px;
+                    color:#777;
+                    font-size:12px;
+                  "
+                >
+                  VIP Level ${index + 1}
+                </div>
+
+              </div>
+
+              <span
+                style="
+                  font-weight:bold;
+                  background:#fff3cd;
+                  color:#856404;
+                  padding:5px 10px;
+                  border-radius:15px;
+                  white-space:nowrap;
+                "
+              >
+                ETB ${money(vip.price)}
+              </span>
+
+            </div>
+
+            <hr
+              style="
+                border:0;
+                border-top:1px solid #eee;
+                margin:10px 0;
+              "
+            />
+
+            <div
+              style="
+                font-size:.95rem;
+                line-height:1.7;
+              "
+            >
+
+              <p>
+                <strong>
+                  Package Price:
+                </strong>
+                ETB ${money(vip.price)}
+              </p>
+
+              <p>
+                <strong>
+                  Profit:
+                </strong>
+                ETB ${money(vip.profit)}
+              </p>
+
+              <p>
+                <strong>
+                  Validity:
+                </strong>
+                ${vip.validDays} Days
+              </p>
+
+              <p>
+                <strong>
+                  Total Return:
+                </strong>
+                ETB ${money(
+                  vip.price + vip.profit
+                )}
+              </p>
+
+            </div>
+
+            <button
+              type="button"
+              class="primary-btn buy-vip-btn"
+              data-vip-id="${escapeHtml(vip.id)}"
+              style="
+                margin-top:12px;
+                width:100%;
+                padding:11px;
+                font-weight:bold;
+                border-radius:8px;
+              "
+              ${isCurrent ? "disabled" : ""}
+            >
+              ${
+                isCurrent
+                  ? "Current Active VIP"
+                  : "Purchase"
+              }
+            </button>
+
+          </div>
+        `;
+      })
+      .join("");
+
+  /* =======================================================
+     PURCHASE BUTTONS
+  ======================================================= */
+
+  container
+    .querySelectorAll(
+      ".buy-vip-btn:not([disabled])"
+    )
+    .forEach(button => {
+
+      button.onclick = async () => {
+
+        const vip =
+          levels.find(
+            item =>
+              item.id ===
+              button.dataset.vipId
+          );
+
+        if (!vip) {
+
+          alert(
+            "VIP package not found."
+          );
+
+          return;
+        }
+
+        await window.buyVIP(
+          vip.id,
+          vip.name,
+          vip.price,
+          vip.profit,
+          vip.validDays
+        );
+      };
+
+    });
+
+  /* =======================================================
+     COMPANY SALARY
+  ======================================================= */
+
+  renderCompanySalaryStructure();
+}
+
+
+/* =========================================================
+   BUY VIP
+   IMPORTANT:
+   - VIP values are re-read from Firestore
+   - Balance deduction is transactional
+   - VIP order is created in same transaction
+   - lastVipOrderId links both records
+========================================================= */
+
+window.buyVIP = async function (
+  vipId,
+  vipName,
+  price,
+  profit,
+  validDays
+) {
+
+  if (!currentUser) {
+
+    alert(
+      "Please login first."
+    );
+
+    return;
+  }
+
+  if (window._ccusVipSubmitting) {
+    return;
+  }
+
+  window._ccusVipSubmitting = true;
+
+  try {
+
+    const userRef =
+      doc(
+        db,
+        "users",
+        currentUser.uid
+      );
+
+    const vipRef =
+      doc(
+        db,
+        "vip_levels",
+        String(vipId)
+      );
+
+    /*
+     * Create order ID before transaction.
+     * This ID is also stored in users.lastVipOrderId.
+     */
+    const vipOrderRef =
+      doc(
+        collection(
+          db,
+          "vip_orders"
+        )
+      );
+
+    await runTransaction(
+      db,
+      async transaction => {
+
+        /* =================================================
+           READ USER
+        ================================================= */
+
+        const userSnap =
+          await transaction.get(
+            userRef
+          );
+
+        if (!userSnap.exists()) {
+
+          throw new Error(
+            "User account not found."
+          );
+        }
+
+        /* =================================================
+           READ VIP PACKAGE FROM FIRESTORE
+        ================================================= */
+
+        const vipSnap =
+          await transaction.get(
+            vipRef
+          );
+
+        if (!vipSnap.exists()) {
+
+          throw new Error(
+            "VIP package no longer exists."
+          );
+        }
+
+        const vipData =
+          vipSnap.data() || {};
+
+        /* =================================================
+           VIP ACTIVE CHECK
+        ================================================= */
+
+        if (
+          vipData.active === false
+        ) {
+
+          throw new Error(
+            "This VIP package is currently unavailable."
+          );
+        }
+
+        /* =================================================
+           GET REAL FIRESTORE VALUES
+        ================================================= */
+
+        const firestorePrice =
+          Number(
+            vipData.price ??
+            vipData.amount ??
+            vipData.requiredDeposit ??
+            0
+          );
+
+        const firestoreProfit =
+          Number(
+            vipData.profit ??
+            vipData.reward ??
+            vipData.returnProfit ??
+            0
+          );
+
+        const firestoreValidDays =
+          Number(
+            vipData.validDays ??
+            vipData.durationDays ??
+            vipData.days ??
+            0
+          );
+
+        const firestoreName =
+          String(
+            vipData.displayName ||
+            vipData.name ||
+            (
+              vipData.level !== undefined
+                ? `VIP ${vipData.level}`
+                : vipName || "VIP"
+            )
+          );
+
+        /* =================================================
+           VALIDATE VIP PACKAGE
+        ================================================= */
+
+        if (
+          firestorePrice <= 0
+        ) {
+
+          throw new Error(
+            "Invalid VIP price."
+          );
+        }
+
+        if (
+          firestoreProfit < 0
+        ) {
+
+          throw new Error(
+            "Invalid VIP profit."
+          );
+        }
+
+        if (
+          firestoreValidDays <= 0
+        ) {
+
+          throw new Error(
+            "Invalid VIP validity period."
+          );
+        }
+
+        /* =================================================
+           USER DATA
+        ================================================= */
+
+        const userData =
+          userSnap.data() || {};
+
+        const balance =
+          Number(
+            userData.totalBalance || 0
+          );
+
+        const currentVIP =
+          String(
+            userData.vipLevel ||
+            "VIP 0"
+          );
+
+        /* =================================================
+           SAME VIP CHECK
+        ================================================= */
+
+        if (
+          currentVIP ===
+          firestoreName
+        ) {
+
+          throw new Error(
+            "This VIP is already active."
+          );
+        }
+
+        /* =================================================
+           BALANCE CHECK
+        ================================================= */
+
+        if (
+          balance <
+          firestorePrice
+        ) {
+
+          throw new Error(
+            `Insufficient balance! Costs ETB ${money(
+              firestorePrice
+            )}, balance is ETB ${money(
+              balance
+            )}.`
+          );
+        }
+
+        /* =================================================
+           NEW BALANCE
+        ================================================= */
+
+        const newBalance =
+          balance -
+          firestorePrice;
+
+        /* =================================================
+           UPDATE USER
+        ================================================= */
+
+        transaction.update(
+          userRef,
+          {
+
+            totalBalance:
+              newBalance,
+
+            vipLevel:
+              firestoreName,
+
+            /*
+             * IMPORTANT:
+             * Links user update to the exact
+             * VIP order created below.
+             */
+            lastVipOrderId:
+              vipOrderRef.id,
+
+            vipUpdatedAt:
+              serverTimestamp(),
+
+            updatedAt:
+              serverTimestamp()
+          }
+        );
+
+        /* =================================================
+           CREATE VIP ORDER
+        ================================================= */
+
+        transaction.set(
+          vipOrderRef,
+          {
+
+            userId:
+              currentUser.uid,
+
+            userName:
+              userData.fullName ||
+              currentUser.displayName ||
+              "User",
+
+            userEmail:
+              currentUser.email ||
+              "",
+
+            vipId:
+              String(vipId),
+
+            vipName:
+              firestoreName,
+
+            price:
+              firestorePrice,
+
+            profit:
+              firestoreProfit,
+
+            payoutAmount:
+              firestorePrice +
+              firestoreProfit,
+
+            validDays:
+              firestoreValidDays,
+
+            status:
+              "active",
+
+            payoutCompleted:
+              false,
+
+            createdAt:
+              serverTimestamp(),
+
+            updatedAt:
+              serverTimestamp()
+          }
+        );
+
+      }
+    );
+
+    /* =====================================================
+       SUCCESS
+    ===================================================== */
+
+    alert(
+      `${vipName || "VIP"} purchased successfully.`
+    );
+
+    /* =====================================================
+       REFRESH USER UI
+    ===================================================== */
+
+    if (
+      typeof updateUserUI ===
+      "function"
+    ) {
+
+      await updateUserUI();
+
     } else {
-      alert(msg);
+
+      console.warn(
+        "⚠️ updateUserUI() not found."
+      );
+    }
+
+    /* =====================================================
+       REFRESH VIP LIST
+    ===================================================== */
+
+    if (
+      typeof loadVIPLevels ===
+      "function"
+    ) {
+
+      loadVIPLevels();
+    }
+
+  } catch (error) {
+
+    console.error(
+      "❌ VIP purchase error:",
+      error
+    );
+
+    if (
+      error?.code ===
+      "permission-denied"
+    ) {
+
+      alert(
+        "VIP purchase was blocked by Firestore Security Rules."
+      );
+
+      return;
+    }
+
+    alert(
+      error?.message ||
+      "VIP purchase failed."
+    );
+
+  } finally {
+
+    window._ccusVipSubmitting =
+      false;
+  }
+};
+
+
+/* =========================================================
+   EXPOSE VIP FUNCTIONS
+========================================================= */
+
+window.loadVIPLevels =
+  loadVIPLevels;
+
+window.renderVIPLevels =
+  renderVIPLevels;
+
+
+/* =========================================================
+   COMPANY SALARY STRUCTURE
+========================================================= */
+
+const companySalaryLevels = [
+
+  {
+    level: 1,
+    position: "Team Leader",
+    requirement:
+      "10 A-level employees + 15 ABC level",
+    salary: 2000
+  },
+
+  {
+    level: 2,
+    position: "Reserve Manager",
+    requirement:
+      "15 A-level + 50 ABC employees",
+    salary: 6000
+  },
+
+  {
+    level: 3,
+    position: "Senior Trainee Manager",
+    requirement:
+      "150+ ABC employees",
+    salary: 15000
+  },
+
+  {
+    level: 4,
+    position: "Marketing Manager",
+    requirement:
+      "240+ team members",
+    salary: 25000
+  },
+
+  {
+    level: 5,
+    position:
+      "Marketing General Manager",
+    requirement:
+      "550+ team members",
+    salary: 75000
+  },
+
+  {
+    level: 6,
+    position:
+      "Regional Manager",
+    requirement:
+      "1,200+ team members",
+    salary: 250000
+  },
+
+  {
+    level: 7,
+    position:
+      "Regional General Manager",
+    requirement:
+      "2,000+ team members",
+    salary: 750000
+  },
+
+  {
+    level: 8,
+    position:
+      "City Partner",
+    requirement:
+      "3,000+ team members",
+    salary: 1500000
+  }
+
+];
+
+
+/* =========================================================
+   RENDER COMPANY SALARY
+========================================================= */
+
+function renderCompanySalaryStructure() {
+
+  const vipContainer =
+    document.querySelector(
+      ".vip-container"
+    );
+
+  if (!vipContainer) {
+    return;
+  }
+
+  let container =
+    document.getElementById(
+      "companySalaryStructure"
+    );
+
+  if (!container) {
+
+    container =
+      document.createElement("div");
+
+    container.id =
+      "companySalaryStructure";
+
+    vipContainer.appendChild(
+      container
+    );
+  }
+
+  container.innerHTML = `
+
+    <div
+      style="
+        margin-top:20px;
+        padding:16px;
+        border-radius:12px;
+        background:#fff;
+        border:1px solid #eee;
+      "
+    >
+
+      <div
+        style="
+          margin-bottom:14px;
+        "
+      >
+
+        <h3
+          style="
+            margin:0;
+            font-size:18px;
+          "
+        >
+          🏢 Company Monthly Salary Structure
+        </h3>
+
+      </div>
+
+      <div
+        style="
+          width:100%;
+          overflow-x:auto;
+        "
+      >
+
+        <table
+          style="
+            width:100%;
+            min-width:650px;
+            border-collapse:collapse;
+            font-size:13px;
+          "
+        >
+
+          <thead>
+
+            <tr
+              style="
+                background:#fff3cd;
+              "
+            >
+
+              <th
+                style="
+                  padding:10px;
+                  border:1px solid #eee;
+                  text-align:center;
+                "
+              >
+                Level
+              </th>
+
+              <th
+                style="
+                  padding:10px;
+                  border:1px solid #eee;
+                  text-align:left;
+                "
+              >
+                Position
+              </th>
+
+              <th
+                style="
+                  padding:10px;
+                  border:1px solid #eee;
+                  text-align:left;
+                "
+              >
+                Team Requirement
+              </th>
+
+              <th
+                style="
+                  padding:10px;
+                  border:1px solid #eee;
+                  text-align:right;
+                "
+              >
+                Monthly Salary
+              </th>
+
+            </tr>
+
+          </thead>
+
+          <tbody>
+
+            ${companySalaryLevels
+              .map(item => `
+
+                <tr>
+
+                  <td
+                    style="
+                      padding:10px;
+                      border:1px solid #eee;
+                      text-align:center;
+                      font-weight:bold;
+                    "
+                  >
+                    ${item.level}
+                  </td>
+
+                  <td
+                    style="
+                      padding:10px;
+                      border:1px solid #eee;
+                      font-weight:600;
+                    "
+                  >
+                    ${escapeHtml(
+                      item.position
+                    )}
+                  </td>
+
+                  <td
+                    style="
+                      padding:10px;
+                      border:1px solid #eee;
+                    "
+                  >
+                    ${escapeHtml(
+                      item.requirement
+                    )}
+                  </td>
+
+                  <td
+                    style="
+                      padding:10px;
+                      border:1px solid #eee;
+                      text-align:right;
+                      font-weight:bold;
+                    "
+                  >
+                    ETB ${money(
+                      item.salary
+                    )}
+                  </td>
+
+                </tr>
+
+              `)
+              .join("")}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
+}
+
+
+/* =========================================================
+   INCOME LEVELS
+========================================================= */
+
+let incomeLevelsCache = [];
+
+
+/* =========================================================
+   RENDER INCOME LEVELS
+========================================================= */
+
+function renderIncomeLevelsTable(
+  tbody,
+  levels
+) {
+
+  if (!tbody) {
+    return;
+  }
+
+  if (
+    !Array.isArray(levels) ||
+    !levels.length
+  ) {
+
+    tbody.innerHTML = `
+      <tr>
+        <td
+          colspan="5"
+          style="
+            text-align:center;
+            padding:20px;
+          "
+        >
+          No income levels available.
+        </td>
+      </tr>
+    `;
+
+    return;
+  }
+
+  tbody.innerHTML =
+    levels
+      .map(level => `
+
+        <tr>
+
+          <td>
+            ${Number(
+              level.level || 0
+            )}
+          </td>
+
+          <td>
+            ETB ${money(
+              Number(
+                level.price || 0
+              )
+            )}
+          </td>
+
+          <td>
+            ETB ${money(
+              Number(
+                level.daily || 0
+              )
+            )}
+          </td>
+
+          <td>
+            ETB ${money(
+              Number(
+                level.monthly || 0
+              )
+            )}
+          </td>
+
+          <td>
+            ETB ${money(
+              Number(
+                level.yearly || 0
+              )
+            )}
+          </td>
+
+        </tr>
+
+      `)
+      .join("");
+}
+
+
+/* =========================================================
+   LOAD INCOME LEVELS
+========================================================= */
+
+function loadIncomeLevels() {
+
+  const tbody =
+    document.getElementById(
+      "incomeLevelsTableBody"
+    );
+
+  if (!tbody) {
+
+    console.warn(
+      "⚠️ incomeLevelsTableBody not found."
+    );
+
+    return;
+  }
+
+  /* =======================================================
+     CACHE FIRST
+  ======================================================= */
+
+  if (
+    incomeLevelsCache.length
+  ) {
+
+    renderIncomeLevelsTable(
+      tbody,
+      incomeLevelsCache
+    );
+
+  } else {
+
+    tbody.innerHTML = `
+      <tr>
+        <td
+          colspan="5"
+          style="
+            text-align:center;
+            padding:20px;
+          "
+        >
+          Loading income levels...
+        </td>
+      </tr>
+    `;
+  }
+
+  /* =======================================================
+     STOP OLD LISTENER
+  ======================================================= */
+
+  stopListener(
+    "incomeLevels"
+  );
+
+  /* =======================================================
+     FIRESTORE LISTENER
+  ======================================================= */
+
+  try {
+
+    unsubs.incomeLevels =
+      onSnapshot(
+
+        collection(
+          db,
+          "incomeLevels"
+        ),
+
+        snapshot => {
+
+          const levels =
+            snapshot.docs
+              .map(docSnap => ({
+
+                id:
+                  docSnap.id,
+
+                ...docSnap.data()
+
+              }))
+
+              .filter(
+                item =>
+                  item.active !== false
+              )
+
+              .sort(
+                (a, b) =>
+                  Number(
+                    a.level || 0
+                  ) -
+                  Number(
+                    b.level || 0
+                  )
+              );
+
+          incomeLevelsCache =
+            levels;
+
+          renderIncomeLevelsTable(
+            tbody,
+            levels
+          );
+        },
+
+        error => {
+
+          console.error(
+            "❌ Income Levels Error:",
+            error
+          );
+
+          if (
+            incomeLevelsCache.length
+          ) {
+
+            renderIncomeLevelsTable(
+              tbody,
+              incomeLevelsCache
+            );
+
+          } else {
+
+            tbody.innerHTML = `
+              <tr>
+                <td
+                  colspan="5"
+                  style="
+                    text-align:center;
+                    padding:20px;
+                    color:#c00;
+                  "
+                >
+                  Failed to load income levels.
+                </td>
+              </tr>
+            `;
+          }
+        }
+      );
+
+  } catch (error) {
+
+    console.error(
+      "❌ Income Levels Listener Error:",
+      error
+    );
+
+  }
+}
+
+
+/* =========================================================
+   EXPOSE INCOME FUNCTION
+========================================================= */
+
+window.loadIncomeLevels =
+  loadIncomeLevels;
+
+window.renderCompanySalaryStructure =
+  renderCompanySalaryStructure;
+
+
+/* =========================================================
+   OPTIONAL INITIAL LOAD
+   Call these from your existing page/router when needed.
+========================================================= */
+
+// window.loadVIPLevels();
+// window.loadIncomeLevels();
+/* =========================================================
+CCUS - DAILY TASKS SYSTEM
+FINAL STABLE VERSION
+=========================================================
+
+BUSINESS RULES
+---------------------------------------------------------
+1. Approved recharge determines task level.
+
+2. Highest eligible approved recharge level is used.
+
+3. Upgrade recharge is counted by its upgrade amount.
+
+4. Task levels are controlled from:
+   rechargeLevels
+
+5. Sunday = blocked.
+
+6. Task hours:
+   09:00 AM - 09:00 PM Ethiopia time.
+
+7. One task can be claimed once per day.
+
+8. Daily task limit comes from the highest
+   eligible recharge level.
+
+9. Task reward increases totalBalance.
+
+10. totalRecharge is NEVER changed by task claim.
+
+11. vipLevel is NEVER required for task claim.
+
+12. users/{uid}.taskLimit is NOT required.
+
+13. Firestore task reward is authoritative.
+
+14. Claim ID:
+   YYYY-MM-DD_taskId
+
+15. Atomic Firestore transaction.
+
+16. All transaction reads happen before writes.
+
+========================================================= */
+
+
+/* =========================================================
+GLOBAL STATE
+========================================================= */
+
+window.dailyTasksCache =
+  Array.isArray(window.dailyTasksCache)
+    ? window.dailyTasksCache
+    : [];
+
+window.dailyTasksLoaded =
+  Boolean(window.dailyTasksLoaded);
+
+window.dailyTasksLoading =
+  false;
+
+window.dailyTasksMeta =
+  window.dailyTasksMeta || {
+    dailyLimit: 0,
+    isSunday: false,
+    noDeposit: false,
+    status: {},
+    claimedCount: 0,
+    approvedTotal: 0,
+    currentLevel: null
+  };
+
+window.ccusTaskClaimLocks =
+  window.ccusTaskClaimLocks instanceof Set
+    ? window.ccusTaskClaimLocks
+    : new Set();
+
+
+/* =========================================================
+SAFE ACTIVE VALUE
+========================================================= */
+
+function isTaskActiveValue(value) {
+
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return true;
+  }
+
+  if (
+    value === false ||
+    value === 0
+  ) {
+    return false;
+  }
+
+  const normalized =
+    String(value)
+      .trim()
+      .toLowerCase();
+
+  return ![
+    "false",
+    "0",
+    "inactive",
+    "disabled",
+    "off"
+  ].includes(normalized);
+}
+
+
+/* =========================================================
+SAFE NUMBER
+========================================================= */
+
+function ccusTaskNumber(
+  value,
+  fallback = 0
+) {
+
+  const n =
+    Number(value);
+
+  return Number.isFinite(n)
+    ? n
+    : fallback;
+}
+
+
+/* =========================================================
+TASK SETTINGS
+========================================================= */
+
+async function loadTaskSettings() {
+
+  try {
+
+    const snap =
+      await getDoc(
+        doc(
+          db,
+          "settings",
+          "taskSettings"
+        )
+      );
+
+    const data =
+      snap.exists()
+        ? snap.data() || {}
+        : {};
+
+    const reward =
+      Number(
+        data.rewardPerTask ?? 0
+      );
+
+    window.taskSettings = {
+
+      active:
+        isTaskActiveValue(
+          data.active
+        ),
+
+      rewardPerTask:
+        Number.isFinite(reward)
+          ? Math.max(0, reward)
+          : 0
+    };
+
+    return window.taskSettings;
+
+  } catch (error) {
+
+    console.error(
+      "❌ Task settings load error:",
+      error
+    );
+
+    window.taskSettings = {
+      active: true,
+      rewardPerTask: 0
+    };
+
+    return window.taskSettings;
+  }
+}
+
+
+/* =========================================================
+LOAD RECHARGE LEVELS
+========================================================= */
+
+async function ensureTaskRechargeLevels() {
+
+  try {
+
+    const snap =
+      await getDocs(
+        collection(
+          db,
+          "rechargeLevels"
+        )
+      );
+
+    const levels = [];
+
+    snap.forEach(
+      levelSnap => {
+
+        const data =
+          levelSnap.data() || {};
+
+        let level = null;
+
+
+        /* -----------------------------------------------
+           USE EXISTING NORMALIZER IF AVAILABLE
+           ----------------------------------------------- */
+
+        if (
+          typeof normalizeRechargeLevel ===
+          "function"
+        ) {
+
+          try {
+
+            level =
+              normalizeRechargeLevel(
+                levelSnap.id,
+                data
+              );
+
+          } catch (error) {
+
+            console.warn(
+              "⚠️ normalizeRechargeLevel error:",
+              error
+            );
+          }
+        }
+
+
+        /* -----------------------------------------------
+           FALLBACK NORMALIZER
+           ----------------------------------------------- */
+
+        if (!level) {
+
+          level = {
+
+            id:
+              levelSnap.id,
+
+            level:
+              data.level ??
+              data.name ??
+              levelSnap.id,
+
+            name:
+              data.name ??
+              data.level ??
+              levelSnap.id,
+
+            amount:
+              Number(
+                data.amount ??
+                data.depositAmount ??
+                data.price ??
+                0
+              ),
+
+            taskLimit:
+              Number(
+                data.taskLimit ??
+                0
+              ),
+
+            active:
+              isTaskActiveValue(
+                data.active
+              ),
+
+            order:
+              Number(
+                data.order ??
+                999999
+              )
+          };
+        }
+
+
+        const amount =
+          Number(
+            level.amount ??
+            level.depositAmount ??
+            level.price ??
+            0
+          );
+
+
+        if (
+          !Number.isFinite(amount) ||
+          amount <= 0
+        ) {
+          return;
+        }
+
+
+        if (
+          !isTaskActiveValue(
+            level.active
+          )
+        ) {
+          return;
+        }
+
+
+        const taskLimit =
+          Number(
+            level.taskLimit ?? 0
+          );
+
+
+        levels.push({
+
+          ...level,
+
+          id:
+            level.id ||
+            levelSnap.id,
+
+          name:
+            level.name ??
+            level.level ??
+            levelSnap.id,
+
+          amount,
+
+          taskLimit:
+            Number.isFinite(taskLimit)
+              ? Math.max(
+                  0,
+                  Math.floor(taskLimit)
+                )
+              : 0,
+
+          active: true,
+
+          order:
+            Number(
+              level.order ??
+              data.order ??
+              999999
+            )
+        });
+      }
+    );
+
+
+    levels.sort(
+      (a, b) => {
+
+        const amountDiff =
+          Number(a.amount || 0) -
+          Number(b.amount || 0);
+
+        if (
+          amountDiff !== 0
+        ) {
+          return amountDiff;
+        }
+
+        return (
+          Number(a.order ?? 999999) -
+          Number(b.order ?? 999999)
+        );
+      }
+    );
+
+
+    try {
+
+      if (
+        typeof rechargeLevels !==
+        "undefined"
+      ) {
+
+        rechargeLevels =
+          levels;
+      }
+
+    } catch (error) {}
+
+
+    window.rechargeLevels =
+      levels;
+
+
+    return levels;
+
+  } catch (error) {
+
+    console.error(
+      "❌ Recharge levels load error:",
+      error
+    );
+
+    window.rechargeLevels =
+      [];
+
+    return [];
+  }
+}
+
+
+/* =========================================================
+GET APPROVED RECHARGE RECORDS
+========================================================= */
+
+async function getApprovedRechargeRecords(
+  userId = currentUser?.uid
+) {
+
+  if (!userId) {
+    return [];
+  }
+
+
+  try {
+
+    const snap =
+      await getDocs(
+        query(
+          collection(
+            db,
+            "rechargeRequests"
+          ),
+
+          where(
+            "userId",
+            "==",
+            userId
+          )
+        )
+      );
+
+
+    return snap.docs
+      .map(
+        item => ({
+
+          id:
+            item.id,
+
+          ...item.data()
+        })
+      )
+      .filter(
+        item =>
+          String(
+            item.status ?? ""
+          )
+            .trim()
+            .toLowerCase() ===
+          "approved"
+      );
+
+  } catch (error) {
+
+    console.error(
+      "❌ Approved recharge records error:",
+      error
+    );
+
+    return [];
+  }
+}
+
+
+/* =========================================================
+RECHARGE CONTRIBUTION
+========================================================= */
+
+function getApprovedRechargeContribution(
+  record
+) {
+
+  if (!record) {
+    return 0;
+  }
+
+
+  /* -------------------------------------------------------
+     UPGRADE
+     ------------------------------------------------------- */
+
+  const isUpgrade =
+    record.isUpgrade === true ||
+    String(
+      record.isUpgrade ?? ""
+    )
+      .trim()
+      .toLowerCase() ===
+    "true";
+
+
+  if (isUpgrade) {
+
+    const upgradeAmount =
+      Number(
+        record.upgradeAmount ?? 0
+      );
+
+    if (
+      Number.isFinite(upgradeAmount) &&
+      upgradeAmount > 0
+    ) {
+
+      return upgradeAmount;
+    }
+  }
+
+
+  /* -------------------------------------------------------
+     LEGACY UPGRADE
+     ------------------------------------------------------- */
+
+  const legacyUpgradeAmount =
+    Number(
+      record.upgradeAmount ?? 0
+    );
+
+
+  if (
+    Number.isFinite(
+      legacyUpgradeAmount
+    ) &&
+
+    legacyUpgradeAmount > 0 &&
+
+    (
+      record.levelAmount !==
+      undefined ||
+
+      record.approvedTotalRecharge !==
+      undefined ||
+
+      record.targetLevelAmount !==
+      undefined
+    )
+  ) {
+
+    return legacyUpgradeAmount;
+  }
+
+
+  /* -------------------------------------------------------
+     NORMAL RECHARGE
+     ------------------------------------------------------- */
+
+  const amount =
+    Number(
+      record.amount ??
+      record.depositAmount ??
+      record.rechargeAmount ??
+      record.approvedAmount ??
+      0
+    );
+
+
+  return (
+    Number.isFinite(amount) &&
+    amount > 0
+  )
+    ? amount
+    : 0;
+}
+
+
+/* =========================================================
+GET APPROVED TOTAL
+========================================================= */
+
+async function getApprovedRechargeTotal(
+  userId = currentUser?.uid
+) {
+
+  if (!userId) {
+    return 0;
+  }
+
+
+  /* -------------------------------------------------------
+     FIRST: USERS TOTAL RECHARGE
+     ------------------------------------------------------- */
+
+  let userTotal = 0;
+
+  try {
+
+    const userSnap =
+      await getDoc(
+        doc(
+          db,
+          "users",
+          userId
+        )
+      );
+
+
+    if (
+      userSnap.exists()
+    ) {
+
+      const data =
+        userSnap.data() || {};
+
+      const total =
+        Number(
+          data.totalRecharge ?? 0
+        );
+
+
+      if (
+        Number.isFinite(total) &&
+        total >= 0
+      ) {
+
+        userTotal =
+          total;
+      }
+    }
+
+  } catch (error) {
+
+    console.warn(
+      "⚠️ totalRecharge read warning:",
+      error
+    );
+  }
+
+
+  /* -------------------------------------------------------
+     USE APPROVED REQUESTS TOO
+     
+     If approved requests contain a larger
+     approved total, use that value.
+     ------------------------------------------------------- */
+
+  try {
+
+    const approved =
+      await getApprovedRechargeRecords(
+        userId
+      );
+
+
+    if (
+      approved.length > 0
+    ) {
+
+      const requestTotal =
+        approved.reduce(
+          (
+            total,
+            record
+          ) => {
+
+            return (
+              total +
+              getApprovedRechargeContribution(
+                record
+              )
+            );
+          },
+          0
+        );
+
+
+      /*
+       * Normally users.totalRecharge is authoritative.
+       * But if it is zero while approved requests exist,
+       * use approved request total.
+       */
+
+      if (
+        userTotal <= 0 &&
+        requestTotal > 0
+      ) {
+
+        return requestTotal;
+      }
+    }
+
+  } catch (error) {
+
+    console.warn(
+      "⚠️ Approved recharge fallback warning:",
+      error
+    );
+  }
+
+
+  return userTotal;
+}
+
+
+/* =========================================================
+GET HIGHEST ELIGIBLE LEVEL
+========================================================= */
+
+async function getApprovedRechargeLevel(
+  userId = currentUser?.uid
+) {
+
+  if (!userId) {
+    return null;
+  }
+
+
+  const levels =
+    await ensureTaskRechargeLevels();
+
+
+  if (
+    !Array.isArray(levels) ||
+    levels.length === 0
+  ) {
+
+    return null;
+  }
+
+
+  const approvedTotal =
+    await getApprovedRechargeTotal(
+      userId
+    );
+
+
+  if (
+    !Number.isFinite(approvedTotal) ||
+    approvedTotal <= 0
+  ) {
+
+    return null;
+  }
+
+
+  let currentLevel =
+    null;
+
+
+  for (
+    const level of levels
+  ) {
+
+    const amount =
+      Number(
+        level.amount ?? 0
+      );
+
+
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      continue;
+    }
+
+
+    if (
+      approvedTotal >= amount
+    ) {
+
+      if (
+        !currentLevel ||
+
+        amount >
+        Number(
+          currentLevel.amount ?? 0
+        )
+      ) {
+
+        currentLevel =
+          level;
+      }
+    }
+  }
+
+
+  if (!currentLevel) {
+    return null;
+  }
+
+
+  return {
+
+    ...currentLevel,
+
+    approvedTotal,
+
+    calculatedByTotal: true
+  };
+}
+
+
+/* =========================================================
+GET USER DAILY TASK LIMIT
+========================================================= */
+
+async function getUserDailyTaskLimit(
+  userId = currentUser?.uid
+) {
+
+  if (!userId) {
+    return 0;
+  }
+
+
+  const level =
+    await getApprovedRechargeLevel(
+      userId
+    );
+
+
+  if (!level) {
+    return 0;
+  }
+
+
+  const limit =
+    Number(
+      level.taskLimit ?? 0
+    );
+
+
+  return Number.isFinite(limit)
+    ? Math.max(
+        0,
+        Math.floor(limit)
+      )
+    : 0;
+}
+
+
+/* =========================================================
+TODAY CLAIMS
+========================================================= */
+
+async function getTodayTaskClaims(
+  userId = currentUser?.uid
+) {
+
+  if (!userId) {
+
+    return {
+      ids: new Set(),
+      count: 0
+    };
+  }
+
+
+  try {
+
+    const today =
+      getLocalDateString();
+
+
+    const claimsRef =
+      collection(
+        db,
+        "users",
+        userId,
+        "taskClaims"
+      );
+
+
+    const snap =
+      await getDocs(
+        query(
+          claimsRef,
+
+          where(
+            "date",
+            "==",
+            today
+          )
+        )
+      );
+
+
+    const ids =
+      new Set();
+
+
+    snap.forEach(
+      claimSnap => {
+
+        const data =
+          claimSnap.data() || {};
+
+
+        if (
+          data.taskId !==
+          undefined &&
+
+          data.taskId !==
+          null
+        ) {
+
+          ids.add(
+            String(
+              data.taskId
+            )
+          );
+        }
+      }
+    );
+
+
+    return {
+
+      ids,
+
+      count:
+        snap.size
+    };
+
+  } catch (error) {
+
+    console.error(
+      "❌ Today's claims error:",
+      error
+    );
+
+
+    return {
+
+      ids:
+        new Set(),
+
+      count:
+        0
+    };
+  }
+}
+
+
+/* =========================================================
+OPERATING STATUS
+========================================================= */
+
+async function getSafeTaskOperatingStatus() {
+
+  const parts =
+    getEthiopiaDateParts();
+
+
+  /* -------------------------------------------------------
+     SUNDAY
+     ------------------------------------------------------- */
+
+  if (
+    Number(parts.weekday) === 0
+  ) {
+
+    return {
+
+      allowed: false,
+
+      isSunday: true,
+
+      reason:
+        "sunday",
+
+      message:
+        "Today is Sunday. Tasks cannot be claimed today."
+    };
+  }
+
+
+  /* -------------------------------------------------------
+     HOURS
+     09:00 - 21:00
+     ------------------------------------------------------- */
+
+  const hour =
+    Number(
+      parts.hour ?? 0
+    );
+
+
+  const minute =
+    Number(
+      parts.minute ?? 0
+    );
+
+
+  const totalMinutes =
+    hour * 60 +
+    minute;
+
+
+  if (
+    totalMinutes < 540 ||
+    totalMinutes >= 1260
+  ) {
+
+    return {
+
+      allowed: false,
+
+      isSunday: false,
+
+      reason:
+        "outside_task_hours",
+
+      message:
+        "Daily Tasks are available from 9:00 AM to 9:00 PM only."
+    };
+  }
+
+
+  /* -------------------------------------------------------
+     ADMIN CALENDAR
+     ------------------------------------------------------- */
+
+  try {
+
+    if (
+      typeof getTodayOperatingStatus ===
+      "function"
+    ) {
+
+      const calendar =
+        await getTodayOperatingStatus();
+
+
+      if (
+        calendar
+      ) {
+
+        return {
+
+          ...calendar,
+
+          isSunday:
+            calendar.reason ===
+            "sunday"
+        };
+      }
+    }
+
+  } catch (error) {
+
+    console.warn(
+      "⚠️ Calendar status warning:",
+      error
+    );
+  }
+
+
+  return {
+
+    allowed: true,
+
+    isSunday: false,
+
+    reason: "open"
+  };
+}
+
+
+/* =========================================================
+GET ACTIVE TASKS
+========================================================= */
+
+async function getActiveDailyTasks() {
+
+  try {
+
+    const snap =
+      await getDocs(
+        collection(
+          db,
+          "tasks"
+        )
+      );
+
+
+    const tasks = [];
+
+
+    snap.forEach(
+      taskSnap => {
+
+        const data =
+          taskSnap.data() || {};
+
+
+        if (
+          !isTaskActiveValue(
+            data.active
+          )
+        ) {
+
+          return;
+        }
+
+
+        const rawOrder =
+          Number(
+            data.order
+          );
+
+
+        const order =
+          Number.isFinite(rawOrder)
+            ? rawOrder
+            : 999999;
+
+
+        /*
+         * Firestore task reward is authoritative.
+         */
+
+        const rawReward =
+          data.reward ??
+          data.rewardAmount ??
+          window.taskSettings
+            ?.rewardPerTask ??
+          0;
+
+
+        const reward =
+          Number(
+            rawReward
+          );
+
+
+        tasks.push({
+
+          id:
+            taskSnap.id,
+
+          title:
+            String(
+              data.title ??
+              data.name ??
+              "Daily Task"
+            ).trim(),
+
+          description:
+            String(
+              data.description ??
+              data.message ??
+              ""
+            ).trim(),
+
+          order,
+
+          reward:
+            Number.isFinite(reward)
+              ? Math.max(
+                  0,
+                  reward
+                )
+              : 0,
+
+          active: true
+        });
+      }
+    );
+
+
+    tasks.sort(
+      (a, b) => {
+
+        const orderDiff =
+          a.order -
+          b.order;
+
+
+        if (
+          orderDiff !== 0
+        ) {
+
+          return orderDiff;
+        }
+
+
+        return String(a.id)
+          .localeCompare(
+            String(b.id)
+          );
+      }
+    );
+
+
+    return tasks.map(
+      (
+        task,
+        index
+      ) => ({
+
+        ...task,
+
+        taskNumber:
+          index + 1
+      })
+    );
+
+  } catch (error) {
+
+    console.error(
+      "❌ Active tasks error:",
+      error
+    );
+
+    throw error;
+  }
+}
+
+
+/* =========================================================
+LOADING UI
+========================================================= */
+
+function showDailyTasksLoading() {
+
+  [
+    $("taskListContainer"),
+    $("homeTaskListContainer"),
+    $("tasksPageContainer")
+  ]
+    .filter(Boolean)
+    .forEach(
+      container => {
+
+        container.innerHTML = `
+
+          <div
+            style="
+              text-align:center;
+              padding:20px;
+            "
+          >
+            Loading daily tasks...
+          </div>
+
+        `;
+      }
+    );
+}
+
+
+/* =========================================================
+RENDER FROM CACHE
+========================================================= */
+
+function renderDailyTasksFromCache() {
+
+  if (
+    !window.dailyTasksLoaded
+  ) {
+
+    return false;
+  }
+
+
+  const meta =
+    window.dailyTasksMeta || {};
+
+
+  renderDailyTasks(
+
+    window.dailyTasksCache || [],
+
+    Number(
+      meta.dailyLimit || 0
+    ),
+
+    Boolean(
+      meta.isSunday
+    ),
+
+    Boolean(
+      meta.noDeposit
+    ),
+
+    meta.status || {}
+  );
+
+
+  return true;
+}
+
+
+/* =========================================================
+LOAD DAILY TASKS
+========================================================= */
+
+async function loadDailyTasks(
+  options = {}
+) {
+
+  if (
+    !options.force &&
+
+    window.dailyTasksLoaded &&
+
+    Array.isArray(
+      window.dailyTasksCache
+    )
+  ) {
+
+    renderDailyTasksFromCache();
+
+    return window.dailyTasksCache;
+  }
+
+
+  if (
+    window.dailyTasksLoading ||
+    !currentUser
+  ) {
+
+    return (
+      window.dailyTasksCache || []
+    );
+  }
+
+
+  window.dailyTasksLoading =
+    true;
+
+
+  showDailyTasksLoading();
+
+
+  try {
+
+    const settings =
+      await loadTaskSettings();
+
+
+    if (
+      !settings.active
+    ) {
+
+      window.dailyTasksCache =
+        [];
+
+      window.dailyTasksLoaded =
+        true;
+
+
+      window.dailyTasksMeta = {
+
+        dailyLimit: 0,
+
+        isSunday: false,
+
+        noDeposit: false,
+
+        approvedTotal: 0,
+
+        currentLevel: null,
+
+        claimedCount: 0,
+
+        status: {
+
+          allowed: false,
+
+          reason: "disabled",
+
+          message:
+            "Tasks are currently unavailable."
+        }
+      };
+
+
+      renderDailyTasks(
+        [],
+        0,
+        false,
+        false,
+        window.dailyTasksMeta.status
+      );
+
+
+      return [];
+    }
+
+
+    const status =
+      await getSafeTaskOperatingStatus();
+
+
+    const isSunday =
+      status.reason ===
+      "sunday" ||
+      status.isSunday === true;
+
+
+    const tasks =
+      await getActiveDailyTasks();
+
+
+    if (
+      !tasks.length
+    ) {
+
+      window.dailyTasksCache =
+        [];
+
+      window.dailyTasksLoaded =
+        true;
+
+
+      window.dailyTasksMeta = {
+
+        dailyLimit: 0,
+
+        isSunday,
+
+        noDeposit: false,
+
+        approvedTotal: 0,
+
+        currentLevel: null,
+
+        claimedCount: 0,
+
+        status
+      };
+
+
+      renderDailyTasks(
+        [],
+        0,
+        isSunday,
+        false,
+        status
+      );
+
+
+      return [];
+    }
+
+
+    const level =
+      await getApprovedRechargeLevel(
+        currentUser.uid
+      );
+
+
+    const approvedTotal =
+      level?.approvedTotal ??
+      await getApprovedRechargeTotal(
+        currentUser.uid
+      );
+
+
+    const claimed =
+      await getTodayTaskClaims(
+        currentUser.uid
+      );
+
+
+    if (!level) {
+
+      const mapped =
+        tasks.map(
+          task => ({
+
+            ...task,
+
+            submitted:
+              claimed.ids.has(
+                String(task.id)
+              )
+          })
+        );
+
+
+      window.dailyTasksCache =
+        mapped;
+
+      window.dailyTasksLoaded =
+        true;
+
+
+      window.dailyTasksMeta = {
+
+        dailyLimit: 0,
+
+        isSunday,
+
+        noDeposit: true,
+
+        approvedTotal,
+
+        currentLevel: null,
+
+        claimedCount:
+          claimed.count,
+
+        status
+      };
+
+
+      renderDailyTasks(
+        mapped,
+        0,
+        isSunday,
+        true,
+        status
+      );
+
+
+      return mapped;
+    }
+
+
+    const dailyLimit =
+      Math.max(
+        0,
+        Math.floor(
+          Number(
+            level.taskLimit ?? 0
+          )
+        )
+      );
+
+
+    const mapped =
+      tasks.map(
+        task => ({
+
+          ...task,
+
+          submitted:
+            claimed.ids.has(
+              String(task.id)
+            )
+        })
+      );
+
+
+    window.dailyTasksCache =
+      mapped;
+
+    window.dailyTasksLoaded =
+      true;
+
+
+    window.dailyTasksMeta = {
+
+      dailyLimit,
+
+      isSunday,
+
+      noDeposit: false,
+
+      approvedTotal,
+
+      currentLevel: level,
+
+      claimedCount:
+        claimed.count,
+
+      status
+    };
+
+
+    renderDailyTasks(
+      mapped,
+      dailyLimit,
+      isSunday,
+      false,
+      status
+    );
+
+
+    return mapped;
+
+  } catch (error) {
+
+    console.error(
+      "❌ Daily task load error:",
+      error
+    );
+
+
+    [
+      $("taskListContainer"),
+      $("homeTaskListContainer"),
+      $("tasksPageContainer")
+    ]
+      .filter(Boolean)
+      .forEach(
+        container => {
+
+          container.innerHTML = `
+
+            <div
+              class="empty-state"
+              style="
+                text-align:center;
+                padding:25px;
+              "
+            >
+
+              <h3>
+                Unable to Load Tasks
+              </h3>
+
+              <p>
+                Please try again later.
+              </p>
+
+            </div>
+
+          `;
+        }
+      );
+
+
+    return [];
+
+  } finally {
+
+    window.dailyTasksLoading =
+      false;
+  }
+}
+
+
+/* =========================================================
+DISABLED BUTTON
+========================================================= */
+
+function getDisabledBtn(
+  text,
+  bg = "#eee"
+) {
+
+  return `
+    <button
+      type="button"
+      disabled
+      style="
+        margin-top:8px;
+        width:100%;
+        padding:10px;
+        border:0;
+        border-radius:8px;
+        background:${bg};
+        color:#777;
+      "
+    >
+      ${escapeHtml(text)}
+    </button>
+  `;
+}
+
+
+/* =========================================================
+RENDER DAILY TASKS
+========================================================= */
+
+function renderDailyTasks(
+  tasks,
+  dailyLimit = 0,
+  isSunday = false,
+  noDeposit = false,
+  status = {}
+) {
+
+  const containers = [
+
+    $("taskListContainer"),
+
+    $("homeTaskListContainer"),
+
+    $("tasksPageContainer")
+
+  ].filter(Boolean);
+
+
+  if (
+    !containers.length
+  ) {
+
+    return;
+  }
+
+
+  if (
+    !Array.isArray(tasks) ||
+    tasks.length === 0
+  ) {
+
+    containers.forEach(
+      container => {
+
+        container.innerHTML = `
+
+          <div
+            class="empty-state"
+            style="
+              text-align:center;
+              padding:25px;
+            "
+          >
+
+            <h3>
+              No Daily Tasks Available
+            </h3>
+
+          </div>
+
+        `;
+      }
+    );
+
+
+    updateTaskSummary(
+      0,
+      dailyLimit,
+      isSunday,
+      noDeposit,
+      status
+    );
+
+
+    return;
+  }
+
+
+  const claimedCount =
+    tasks.filter(
+      task =>
+        task.submitted === true
+    ).length;
+
+
+  const html =
+    tasks.map(
+      (
+        task,
+        index
+      ) => {
+
+        const taskNumber =
+          Number(
+            task.taskNumber ??
+            index + 1
+          );
+
+
+        let buttonHTML = "";
+
+
+        if (
+          task.submitted === true
+        ) {
+
+          buttonHTML =
+            getDisabledBtn(
+              "✓ Completed",
+              "#ddd"
+            );
+
+        } else {
+
+          buttonHTML = `
+
+            <button
+              type="button"
+              class="primary-btn task-claim-btn"
+              data-id="${escapeHtml(task.id)}"
+              style="
+                margin-top:8px;
+                width:100%;
+              "
+            >
+              ✅ Claim Reward
+            </button>
+
+          `;
+        }
+
+
+        return `
+
+          <div
+            class="simple-card task-card"
+            data-task-id="${escapeHtml(task.id)}"
+            style="
+              margin-bottom:12px;
+              padding:14px;
+              border:1px solid #ddd;
+              border-radius:10px;
+            "
+          >
+
+            <h3>
+              Task ${taskNumber}
+              ${escapeHtml(task.title)}
+            </h3>
+
+            ${
+              task.description
+                ? `<p>${escapeHtml(task.description)}</p>`
+                : ""
+            }
+
+            <div>
+              Reward:
+              ETB ${money(task.reward)}
+            </div>
+
+            ${buttonHTML}
+
+            <p
+              class="task-message"
+              style="
+                margin-top:7px;
+                min-height:20px;
+              "
+            ></p>
+
+          </div>
+
+        `;
+      }
+    ).join("");
+
+
+  containers.forEach(
+    container => {
+
+      container.innerHTML =
+        html;
+
+
+      container
+        .querySelectorAll(
+          ".task-claim-btn"
+        )
+        .forEach(
+          button => {
+
+            button.onclick =
+              async event => {
+
+                event.preventDefault();
+
+                event.stopPropagation();
+
+
+                if (
+                  button.disabled
+                ) {
+
+                  return;
+                }
+
+
+                const selectedTask =
+                  tasks.find(
+                    item =>
+                      String(item.id) ===
+                      String(button.dataset.id)
+                  );
+
+
+                if (!selectedTask) {
+
+                  return;
+                }
+
+
+                const messageElement =
+                  button
+                    .closest(".task-card")
+                    ?.querySelector(
+                      ".task-message"
+                    );
+
+
+                await claimTask(
+                  selectedTask,
+                  button,
+                  messageElement
+                );
+              };
+          }
+        );
+    }
+  );
+
+
+  updateTaskSummary(
+    claimedCount,
+    dailyLimit,
+    isSunday,
+    noDeposit,
+    status
+  );
+}
+
+
+/* =========================================================
+TASK SUMMARY
+========================================================= */
+
+function updateTaskSummary(
+  claimedCount = 0,
+  dailyLimit = 0,
+  isSunday = false,
+  noDeposit = false,
+  status = {}
+) {
+
+  const summaries = [
+
+    $("taskClaimSummary"),
+
+    $("homeTaskClaimSummary"),
+
+    $("tasksPageClaimSummary")
+
+  ].filter(Boolean);
+
+
+  if (
+    !summaries.length
+  ) {
+
+    return;
+  }
+
+
+  let message = "";
+
+
+  if (isSunday) {
+
+    message =
+      "Today is Sunday. Tasks cannot be claimed today.";
+
+  }
+
+  else if (noDeposit) {
+
+    message =
+      "Approved deposit is required to claim daily tasks.";
+
+  }
+
+  else if (
+    status.reason ===
+    "outside_task_hours"
+  ) {
+
+    message =
+      "Daily Tasks are available from 9:00 AM to 9:00 PM only.";
+
+  }
+
+  else if (
+    status.allowed === false
+  ) {
+
+    message =
+      status.message ||
+      "Tasks are unavailable today.";
+
+  }
+
+  else {
+
+    const claimed =
+      Math.max(
+        0,
+        Number(
+          claimedCount || 0
+        )
+      );
+
+
+    const limit =
+      Math.max(
+        0,
+        Number(
+          dailyLimit || 0
+        )
+      );
+
+
+    if (
+      limit > 0 &&
+      claimed >= limit
+    ) {
+
+      message =
+        `Your daily task limit of ${limit} has been reached.`;
+
+    }
+
+    else if (
+      limit > 0
+    ) {
+
+      message =
+        `${Math.min(
+          claimed,
+          limit
+        )} / ${limit} tasks claimed today`;
+
+    }
+
+    else {
+
+      message =
+        "No daily task limit is currently available.";
+    }
+  }
+
+
+  summaries.forEach(
+    summary => {
+
+      summary.textContent =
+        message;
+    }
+  );
+}
+
+
+/* =========================================================
+UPDATE AFTER SUCCESS
+========================================================= */
+
+function updateTaskAfterSuccessfulClaim(
+  taskId
+) {
+
+  const id =
+    String(taskId);
+
+
+  if (
+    Array.isArray(
+      window.dailyTasksCache
+    )
+  ) {
+
+    window.dailyTasksCache =
+      window.dailyTasksCache.map(
+        task =>
+          String(task.id) === id
+            ? {
+                ...task,
+                submitted: true
+              }
+            : task
+      );
+  }
+
+
+  const meta =
+    window.dailyTasksMeta || {};
+
+
+  const claimedCount =
+    Array.isArray(
+      window.dailyTasksCache
+    )
+      ? window.dailyTasksCache.filter(
+          task =>
+            task.submitted === true
+        ).length
+      : Number(
+          meta.claimedCount || 0
+        ) + 1;
+
+
+  window.dailyTasksMeta = {
+
+    ...meta,
+
+    claimedCount
+  };
+
+
+  document
+    .querySelectorAll(
+      ".task-card"
+    )
+    .forEach(
+      card => {
+
+        if (
+          String(
+            card.dataset.taskId
+          ) !== id
+        ) {
+
+          return;
+        }
+
+
+        const button =
+          card.querySelector(
+            ".task-claim-btn"
+          );
+
+
+        if (button) {
+
+          button.disabled =
+            true;
+
+          button.textContent =
+            "✓ Completed";
+        }
+
+
+        const message =
+          card.querySelector(
+            ".task-message"
+          );
+
+
+        if (message) {
+
+          message.style.color =
+            "green";
+
+          message.textContent =
+            "Reward claimed successfully.";
+        }
+      }
+    );
+
+
+  updateTaskSummary(
+
+    window.dailyTasksMeta
+      ?.claimedCount || 0,
+
+    window.dailyTasksMeta
+      ?.dailyLimit || 0,
+
+    window.dailyTasksMeta
+      ?.isSunday || false,
+
+    window.dailyTasksMeta
+      ?.noDeposit || false,
+
+    window.dailyTasksMeta
+      ?.status || {}
+
+  );
+}
+
+
+/* =========================================================
+CLAIM TASK
+FINAL PERMISSION-SAFE VERSION
+========================================================= */
+
+async function claimTask(
+  task,
+  button,
+  messageElement
+) {
+
+  if (
+    !currentUser ||
+    !task ||
+    !task.id
+  ) {
+
+    return;
+  }
+
+
+  const userId =
+    String(
+      currentUser.uid
+    );
+
+
+  const taskId =
+    String(
+      task.id
+    );
+
+
+  const today =
+    getLocalDateString();
+
+
+  const claimId =
+    `${today}_${taskId}`;
+
+
+  const lockKey =
+    `${userId}_${today}_${taskId}`;
+
+
+  if (
+    !(window.ccusTaskClaimLocks instanceof Set)
+  ) {
+
+    window.ccusTaskClaimLocks =
+      new Set();
+  }
+
+
+  if (
+    window.ccusTaskClaimLocks.has(
+      lockKey
+    )
+  ) {
+
+    return;
+  }
+
+
+  window.ccusTaskClaimLocks.add(
+    lockKey
+  );
+
+
+  if (button) {
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      "✅ Claiming...";
+  }
+
+
+  try {
+
+    /* ===================================================
+       1. OPERATING STATUS
+       =================================================== */
+
+    const status =
+      await getSafeTaskOperatingStatus();
+
+
+    if (
+      status.reason ===
+      "sunday"
+    ) {
+
+      throw new Error(
+        "Today is Sunday. Tasks cannot be claimed today."
+      );
+    }
+
+
+    if (
+      status.reason ===
+      "outside_task_hours"
+    ) {
+
+      throw new Error(
+        "Daily Tasks are available from 9:00 AM to 9:00 PM only."
+      );
+    }
+
+
+    if (
+      status.allowed === false
+    ) {
+
+      throw new Error(
+        status.message ||
+        "Tasks are unavailable today."
+      );
+    }
+
+
+    /* ===================================================
+       2. SETTINGS
+       =================================================== */
+
+    const settings =
+      await loadTaskSettings();
+
+
+    if (
+      !settings.active
+    ) {
+
+      throw new Error(
+        "Tasks are currently unavailable."
+      );
+    }
+
+
+    /* ===================================================
+       3. CURRENT APPROVED LEVEL
+       =================================================== */
+
+    const level =
+      await getApprovedRechargeLevel(
+        userId
+      );
+
+
+    if (!level) {
+
+      throw new Error(
+        "🔒 Approved deposit is required to claim this task."
+      );
+    }
+
+
+    /* ===================================================
+       4. DAILY LIMIT
+       =================================================== */
+
+    const dailyLimit =
+      Math.max(
+        0,
+        Math.floor(
+          Number(
+            level.taskLimit ?? 0
+          )
+        )
+      );
+
+
+    if (
+      dailyLimit <= 0
+    ) {
+
+      throw new Error(
+        "Your current recharge level does not have a daily task limit configured."
+      );
+    }
+
+
+    console.log(
+      "CCUS TASK LEVEL:",
+      {
+
+        approvedTotal:
+          level.approvedTotal,
+
+        levelId:
+          level.id,
+
+        levelName:
+          level.name ??
+          level.level,
+
+        levelAmount:
+          level.amount,
+
+        taskLimit:
+          dailyLimit
+      }
+    );
+
+
+    /* ===================================================
+       5. TODAY CLAIMS
+       =================================================== */
+
+    const todayClaims =
+      await getTodayTaskClaims(
+        userId
+      );
+
+
+    if (
+      todayClaims.count >=
+      dailyLimit
+    ) {
+
+      throw new Error(
+        `Your daily task limit of ${dailyLimit} has been reached.`
+      );
+    }
+
+
+    /* ===================================================
+       6. DUPLICATE TASK
+       =================================================== */
+
+    if (
+      todayClaims.ids.has(
+        taskId
+      )
+    ) {
+
+      throw new Error(
+        "Task already completed today."
+      );
+    }
+
+
+    /* ===================================================
+       7. FIRESTORE REFERENCES
+       =================================================== */
+
+    const userRef =
+      doc(
+        db,
+        "users",
+        userId
+      );
+
+
+    const claimRef =
+      doc(
+        db,
+        "users",
+        userId,
+        "taskClaims",
+        claimId
+      );
+
+
+    const taskRef =
+      doc(
+        db,
+        "tasks",
+        taskId
+      );
+
+
+    let claimedReward =
+      0;
+
+
+    /* ===================================================
+       8. ATOMIC TRANSACTION
+       =================================================== */
+
+    await runTransaction(
+      db,
+      async transaction => {
+
+        /* ------------------------------------------------
+           IMPORTANT:
+           ALL READS FIRST
+           ------------------------------------------------ */
+
+        const userSnap =
+          await transaction.get(
+            userRef
+          );
+
+
+        const claimSnap =
+          await transaction.get(
+            claimRef
+          );
+
+
+        const taskSnap =
+          await transaction.get(
+            taskRef
+          );
+
+
+        /* ------------------------------------------------
+           USER
+           ------------------------------------------------ */
+
+        if (
+          !userSnap.exists()
+        ) {
+
+          throw new Error(
+            "User profile not found."
+          );
+        }
+
+
+        /* ------------------------------------------------
+           TASK
+           ------------------------------------------------ */
+
+        if (
+          !taskSnap.exists()
+        ) {
+
+          throw new Error(
+            "Task not found."
+          );
+        }
+
+
+        /* ------------------------------------------------
+           CLAIM
+           ------------------------------------------------ */
+
+        if (
+          claimSnap.exists()
+        ) {
+
+          throw new Error(
+            "Task already completed today."
+          );
+        }
+
+
+        /* ------------------------------------------------
+           TASK DATA
+           ------------------------------------------------ */
+
+        const taskData =
+          taskSnap.data() || {};
+
+
+        /* ------------------------------------------------
+           ACTIVE
+           ------------------------------------------------ */
+
+        if (
+          !isTaskActiveValue(
+            taskData.active
+          )
+        ) {
+
+          throw new Error(
+            "This task is currently unavailable."
+          );
+        }
+
+
+        /* ------------------------------------------------
+           REWARD
+           
+           Firestore task reward is authoritative.
+           ------------------------------------------------ */
+
+        const reward =
+          Number(
+            taskData.reward ??
+            taskData.rewardAmount ??
+            0
+          );
+
+
+        if (
+          !Number.isFinite(reward) ||
+          reward <= 0
+        ) {
+
+          throw new Error(
+            "Invalid task reward."
+          );
+        }
+
+
+        claimedReward =
+          reward;
+
+
+        /* ------------------------------------------------
+           USER DATA
+           ------------------------------------------------ */
+
+        const userData =
+          userSnap.data() || {};
+
+
+        const balance =
+          Number(
+            userData.totalBalance ?? 0
+          );
+
+
+        if (
+          !Number.isFinite(balance)
+        ) {
+
+          throw new Error(
+            "Invalid wallet balance."
+          );
+        }
+
+
+        /* ------------------------------------------------
+           IMPORTANT SECURITY RULES
+           
+           We do NOT:
+           - change totalRecharge
+           - change vipLevel
+           - change taskLimit
+           - change role
+           - change isAdmin
+           ------------------------------------------------ */
+
+
+        /* ------------------------------------------------
+           CREATE CLAIM
+           ------------------------------------------------ */
+
+        transaction.set(
+          claimRef,
+          {
+
+            userId:
+              userId,
+
+            taskId:
+              taskId,
+
+            taskNumber:
+              Number(
+                task.taskNumber ??
+                0
+              ),
+
+            reward:
+              reward,
+
+            date:
+              today,
+
+            createdAt:
+              serverTimestamp()
+          }
+        );
+
+
+        /* ------------------------------------------------
+           UPDATE USER BALANCE
+           
+           ONLY:
+           totalBalance
+           lastTaskClaimId
+           updatedAt
+           ------------------------------------------------ */
+
+        transaction.update(
+          userRef,
+          {
+
+            totalBalance:
+              balance + reward,
+
+            lastTaskClaimId:
+              claimId,
+
+            updatedAt:
+              serverTimestamp()
+          }
+        );
+      }
+    );
+
+
+    /* ===================================================
+       SUCCESS
+       =================================================== */
+
+    if (button) {
+
+      button.disabled =
+        true;
+
+      button.textContent =
+        "✓ Completed";
+    }
+
+
+    if (messageElement) {
+
+      messageElement.style.color =
+        "green";
+
+      messageElement.textContent =
+        `Reward claimed: ETB ${money(claimedReward)}`;
+    }
+
+
+    updateTaskAfterSuccessfulClaim(
+      taskId
+    );
+
+
+    /* ===================================================
+       UPDATE USER UI
+       =================================================== */
+
+    if (
+      typeof updateUserUI ===
+      "function"
+    ) {
+
+      try {
+
+        await updateUserUI();
+
+      } catch (uiError) {
+
+        console.warn(
+          "⚠️ User UI update warning:",
+          uiError
+        );
+      }
+    }
+
+
+  } catch (error) {
+
+    console.error(
+      "❌ CLAIM TASK ERROR:",
+      error?.code,
+      error?.message,
+      error
+    );
+
+
+    let userMessage =
+      error?.message ||
+      "Error claiming task.";
+
+
+    /* ---------------------------------------------------
+       FIRESTORE PERMISSION
+       --------------------------------------------------- */
+
+    if (
+      error?.code ===
+      "permission-denied"
+    ) {
+
+      userMessage =
+        "Missing or insufficient permissions. Firestore Rules keessatti task claim update hayyamamuu qaba.";
+    }
+
+
+    if (
+      error?.code ===
+      "failed-precondition"
+    ) {
+
+      userMessage =
+        "Firestore transaction failed. Mee network fi Firestore index ilaali.";
+    }
+
+
+    if (button) {
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        "✅ Claim Reward";
+    }
+
+
+    if (messageElement) {
+
+      messageElement.style.color =
+        "#d9534f";
+
+      messageElement.textContent =
+        String(
+          userMessage
+        );
+    }
+
+
+    /* ---------------------------------------------------
+       REFRESH CLAIM COUNT
+       --------------------------------------------------- */
+
+    try {
+
+      const fresh =
+        await getTodayTaskClaims(
+          userId
+        );
+
+
+      window.dailyTasksMeta = {
+
+        ...(window.dailyTasksMeta || {}),
+
+        claimedCount:
+          fresh.count
+      };
+
+    } catch (refreshError) {
+
+      console.warn(
+        "⚠️ Claim refresh error:",
+        refreshError
+      );
+    }
+
+
+    updateTaskSummary(
+
+      window.dailyTasksMeta
+        ?.claimedCount || 0,
+
+      window.dailyTasksMeta
+        ?.dailyLimit || 0,
+
+      window.dailyTasksMeta
+        ?.isSunday || false,
+
+      window.dailyTasksMeta
+        ?.noDeposit || false,
+
+      window.dailyTasksMeta
+        ?.status || {}
+
+    );
+
+  } finally {
+
+    window.ccusTaskClaimLocks.delete(
+      lockKey
+    );
+  }
+}
+
+
+/* =========================================================
+DEBUG - CURRENT LEVEL
+========================================================= */
+
+window.checkCCUSCurrentTaskLevel =
+  async function () {
+
+    try {
+
+      if (!currentUser) {
+
+        console.warn(
+          "No current user."
+        );
+
+        return null;
+      }
+
+
+      const approvedTotal =
+        await getApprovedRechargeTotal(
+          currentUser.uid
+        );
+
+
+      const level =
+        await getApprovedRechargeLevel(
+          currentUser.uid
+        );
+
+
+      const levels =
+        await ensureTaskRechargeLevels();
+
+
+      const result = {
+
+        approvedTotal,
+
+        currentLevel:
+          level
+            ? {
+
+                id:
+                  level.id,
+
+                level:
+                  level.level,
+
+                name:
+                  level.name,
+
+                amount:
+                  level.amount,
+
+                taskLimit:
+                  level.taskLimit
+
+              }
+            : null,
+
+        currentAdminLevels:
+          levels.map(
+            item => ({
+
+              id:
+                item.id,
+
+              level:
+                item.level,
+
+              name:
+                item.name,
+
+              amount:
+                item.amount,
+
+              taskLimit:
+                item.taskLimit,
+
+              active:
+                item.active
+
+            })
+          )
+      };
+
+
+      console.table(
+        result.currentAdminLevels
+      );
+
+
+      console.log(
+        "CCUS CURRENT TASK LEVEL:",
+        result
+      );
+
+
+      return result;
+
+    } catch (error) {
+
+      console.error(
+        "❌ Current level error:",
+        error
+      );
+
+      return null;
     }
   };
 
-  try {
-    const status = await getSafeTaskOperatingStatus();
 
-    if (status?.reason === "sunday" || new Date().getDay() === 0) {
-      return showTaskMessage("Today is Sunday. Tasks cannot be claimed today.");
-    }
+/* =========================================================
+DEBUG - TODAY CLAIMS
+========================================================= */
 
-    if (status?.reason === "outside_task_hours") {
-      return showTaskMessage("Daily Tasks are available from 9:00 AM to 9:00 PM only.");
-    }
+window.checkCCUSTodayClaims =
+  async function () {
 
-    if (status && status.allowed === false) {
-      return showTaskMessage(status.message || "Tasks are unavailable today.");
-    }
+    try {
 
-    const level = await getApprovedRechargeLevel(currentUser.uid);
-    if (!level) {
-      throw new Error("🔒 Approved deposit is required to claim this task.");
-    }
+      if (!currentUser) {
 
-    const dailyLimit = await getUserDailyTaskLimit(currentUser.uid);
-    let taskIndex = window.dailyTasksCache.findIndex(item => String(item.id) === String(task.id));
+        console.warn(
+          "No current user."
+        );
 
-    if (taskIndex < 0 && Number.isFinite(Number(task.taskNumber))) {
-      taskIndex = Number(task.taskNumber) - 1;
-    }
+        return null;
+      }
 
-    if (taskIndex < 0 || taskIndex + 1 > Number(dailyLimit || 0)) {
-      throw new Error("This task is limited or not found.");
-    }
 
-    const reward = Number(task.reward ?? window.taskSettings?.rewardPerTask ?? 0);
-    if (!Number.isFinite(reward) || reward <= 0) {
-      throw new Error("Invalid task reward.");
-    }
+      const today =
+        getLocalDateString();
 
-    if (button) {
-      button.disabled = true;
-      button.textContent = "Processing...";
-    }
 
-    const today = getLocalDateString();
-    const userRef = doc(db, "users", currentUser.uid);
-    const claimRef = doc(db, "users", currentUser.uid, "taskClaims", `${today}_${task.id}`);
+      const snap =
+        await getDocs(
+          query(
+            collection(
+              db,
+              "users",
+              currentUser.uid,
+              "taskClaims"
+            ),
 
-    await runTransaction(db, async transaction => {
-      const [userSnap, claimSnap] = await Promise.all([
-        transaction.get(userRef),
-        transaction.get(claimRef)
-      ]);
+            where(
+              "date",
+              "==",
+              today
+            )
+          )
+        );
 
-      if (!userSnap.exists()) throw new Error("User profile not found.");
-      if (claimSnap.exists()) throw new Error("Task already completed today.");
 
-      transaction.update(userRef, {
-        totalBalance: Number(userSnap.data()?.totalBalance ?? 0) + reward,
-        updatedAt: serverTimestamp()
-      });
+      const claims =
+        snap.docs.map(
+          item => {
 
-      transaction.set(claimRef, {
-        userId: currentUser.uid,
-        taskId: task.id,
-        taskNumber: taskIndex + 1,
-        reward,
+            const data =
+              item.data() || {};
+
+
+            return {
+
+              id:
+                item.id,
+
+              taskId:
+                data.taskId ??
+                null,
+
+              taskNumber:
+                data.taskNumber ??
+                null,
+
+              reward:
+                Number(
+                  data.reward ?? 0
+                ),
+
+              date:
+                data.date ??
+                null
+            };
+          }
+        );
+
+
+      const result = {
+
         date: today,
-        createdAt: serverTimestamp()
-      });
+
+        claimedCount:
+          snap.size,
+
+        claims
+      };
+
+
+      console.table(
+        claims
+      );
+
+
+      console.log(
+        "CCUS TODAY CLAIMS:",
+        result
+      );
+
+
+      return result;
+
+    } catch (error) {
+
+      console.error(
+        "❌ Today's claims debug error:",
+        error
+      );
+
+      return null;
+    }
+  };
+
+
+/* =========================================================
+DEBUG - USER TASK INFORMATION
+========================================================= */
+
+window.checkCCUSUserTaskInfo =
+  async function () {
+
+    try {
+
+      if (!currentUser) {
+
+        console.warn(
+          "No current user."
+        );
+
+        return null;
+      }
+
+
+      const userSnap =
+        await getDoc(
+          doc(
+            db,
+            "users",
+            currentUser.uid
+          )
+        );
+
+
+      if (
+        !userSnap.exists()
+      ) {
+
+        console.warn(
+          "User document does not exist."
+        );
+
+        return null;
+      }
+
+
+      const data =
+        userSnap.data() || {};
+
+
+      const level =
+        await getApprovedRechargeLevel(
+          currentUser.uid
+        );
+
+
+      const result = {
+
+        uid:
+          currentUser.uid,
+
+        totalRecharge:
+          Number(
+            data.totalRecharge ?? 0
+          ),
+
+        totalBalance:
+          Number(
+            data.totalBalance ?? 0
+          ),
+
+        storedTaskLimit:
+          Number(
+            data.taskLimit ?? 0
+          ),
+
+        calculatedApprovedTotal:
+          Number(
+            level?.approvedTotal ?? 0
+          ),
+
+        calculatedLevel:
+          level?.name ??
+          level?.level ??
+          null,
+
+        calculatedLevelAmount:
+          Number(
+            level?.amount ?? 0
+          ),
+
+        calculatedTaskLimit:
+          Number(
+            level?.taskLimit ?? 0
+          )
+      };
+
+
+      console.log(
+        "CCUS USER TASK INFORMATION:",
+        result
+      );
+
+
+      return result;
+
+    } catch (error) {
+
+      console.error(
+        "❌ User task info error:",
+        error
+      );
+
+      return null;
+    }
+  };
+
+
+/* =========================================================
+FORCE REFRESH
+========================================================= */
+
+window.refreshCCUSDailyTasks =
+  async function () {
+
+    window.dailyTasksLoaded =
+      false;
+
+
+    window.dailyTasksCache =
+      [];
+
+
+    window.dailyTasksMeta = {
+
+      dailyLimit: 0,
+
+      isSunday: false,
+
+      noDeposit: false,
+
+      status: {},
+
+      claimedCount: 0,
+
+      approvedTotal: 0,
+
+      currentLevel: null
+    };
+
+
+    return await loadDailyTasks({
+      force: true
     });
-
-    if (button) {
-      button.textContent = "✓ Completed";
-      button.disabled = true;
-    }
-
-    if (messageEl) {
-      messageEl.style.color = "green";
-      messageEl.textContent = `Reward claimed: ETB ${money(reward)}`;
-    }
-
-    updateUserUI();
-    loadDailyTasks();
-  } catch (error) {
-    if (button) {
-      button.disabled = false;
-      button.textContent = "✅ Claim Reward";
-    }
-    showTaskMessage(error?.message || "Error claiming reward.");
-  }
-}
+  };
 
 
-/* Announcements & Notifications */
+/* =========================================================
+OPTIONAL GLOBAL TEST
+========================================================= */
+
+window.testCCUSTaskSystem =
+  async function () {
+
+    console.log(
+      "========== CCUS TASK TEST =========="
+    );
+
+
+    const level =
+      await window.checkCCUSCurrentTaskLevel();
+
+
+    const claims =
+      await window.checkCCUSTodayClaims();
+
+
+    const user =
+      await window.checkCCUSUserTaskInfo();
+
+
+    console.log(
+      "LEVEL:",
+      level
+    );
+
+
+    console.log(
+      "CLAIMS:",
+      claims
+    );
+
+
+    console.log(
+      "USER:",
+      user
+    );
+
+
+    console.log(
+      "========== END TEST =========="
+    );
+
+
+    return {
+
+      level,
+
+      claims,
+
+      user
+    };
+  };
+
+
+/* =========================================================
+END CCUS DAILY TASK SYSTEM
+========================================================= */
+/* =========================================================
+   CCUS USER APP
+   ANNOUNCEMENTS + REFERRAL / TEAM + ADMIN NAVIGATION
+   FINAL CORRECTED SECTION
+========================================================= */
+
+/* Safe Helper Utilities Fallbacks */
+const safeGetTime = (val) => {
+  if (typeof getTime === "function") return getTime(val);
+  if (!val) return 0;
+  if (typeof val.toMillis === "function") return val.toMillis();
+  if (val instanceof Date) return val.getTime();
+  const parsed = new Date(val).getTime();
+  return isNaN(parsed) ? 0 : parsed;
+};
+
+const safeEscapeHtml = (str) => {
+  if (typeof escapeHtml === "function") return escapeHtml(str);
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+const safeMoney = (val) => {
+  if (typeof money === "function") return money(val);
+  const num = Number(val) || 0;
+  return num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const SAFE_INITIALIZED_KEY =
+  typeof INITIALIZED_KEY !== "undefined" ? INITIALIZED_KEY : "ccus_notif_initialized";
+
+
+/* =========================================================
+   ANNOUNCEMENTS
+========================================================= */
+
 const ccusNotifButtonIds = [
-  "notificationButton", "notificationBtn", "notificationsButton",
-  "announcementNotification", "announcementNotificationButton", "homeNotificationButton"
+  "notificationButton",
+  "notificationBtn",
+  "notificationsButton",
+  "announcementNotification",
+  "announcementNotificationButton",
+  "homeNotificationButton"
 ];
 
 let ccusNotifAnnouncements = [];
 let ccusNotifListener = null;
-let ccusNotifStarted = false;
 let ccusNotifToastTimer = null;
 
-function ccusNotifGetUnreadCount() { return getAnnouncementUnreadCount(); }
-function ccusNotifSetUnreadCount(count) { setAnnouncementUnreadCount(count); }
+
+/* =========================================================
+   BADGE
+========================================================= */
+
+function ccusNotifGetUnreadCount() {
+  try {
+    if (typeof getAnnouncementUnreadCount === "function") {
+      return Number(getAnnouncementUnreadCount()) || 0;
+    }
+  } catch (error) {
+    console.warn("getAnnouncementUnreadCount error:", error);
+  }
+  return 0;
+}
 
 function ccusNotifUpdateBadge() {
   const count = ccusNotifGetUnreadCount();
   const text = count > 99 ? "99+" : String(count);
   const display = count > 0 ? "flex" : "none";
 
-  ccusNotifButtonIds.forEach(id => {
-    const btn = $(id);
-    if (!btn) return;
-    if (window.getComputedStyle(btn).position === "static") btn.style.position = "relative";
-    
-    let badge = btn.querySelector(".announcement-notification-badge");
+  ccusNotifButtonIds.forEach((id) => {
+    const button = typeof $ === "function" ? $(id) : document.getElementById(id);
+    if (!button) return;
+
+    if (window.getComputedStyle(button).position === "static") {
+      button.style.position = "relative";
+    }
+
+    let badge = button.querySelector(".announcement-notification-badge");
+
     if (!badge) {
       badge = document.createElement("span");
       badge.className = "announcement-notification-badge";
-      badge.style.cssText = "position:absolute;top:-5px;right:-5px;min-width:20px;height:20px;padding:0 5px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border-radius:999px;background:#e53935;color:#fff;border:2px solid #fff;font-size:10px;font-weight:800;line-height:1;z-index:100;pointer-events:none;";
-      btn.appendChild(badge);
+      badge.style.cssText = [
+        "position:absolute",
+        "top:-5px",
+        "right:-5px",
+        "min-width:20px",
+        "height:20px",
+        "padding:0 5px",
+        "display:flex",
+        "align-items:center",
+        "justify-content:center",
+        "box-sizing:border-box",
+        "border-radius:999px",
+        "background:#e53935",
+        "color:#fff",
+        "border:2px solid #fff",
+        "font-size:10px",
+        "font-weight:800",
+        "line-height:1",
+        "z-index:100",
+        "pointer-events:none"
+      ].join(";");
+
+      button.appendChild(badge);
     }
+
     badge.textContent = text;
     badge.style.display = display;
   });
 
-  ["announcementUnreadCount", "notificationCount"].forEach(id => {
-    const el = $(id);
-    if (el) { el.textContent = text; el.style.display = display; }
+  ["announcementUnreadCount", "notificationCount"].forEach((id) => {
+    const element = typeof $ === "function" ? $(id) : document.getElementById(id);
+    if (!element) return;
+
+    element.textContent = text;
+    element.style.display = display;
   });
 }
+
+
+/* =========================================================
+   MARK ANNOUNCEMENT READ
+========================================================= */
 
 function ccusNotifMarkRead(id) {
-  const sid = String(id || "");
+  const sid = String(id || "").trim();
   if (!sid) return;
-  const seen = getSeenIds();
-  if (seen.includes(sid)) return;
+
+  let seen = [];
+  try {
+    seen = typeof getSeenIds === "function" ? getSeenIds() : [];
+  } catch {
+    seen = [];
+  }
+
+  if (seen.includes(sid)) {
+    return;
+  }
+
   seen.push(sid);
-  saveSeenIds(seen);
-  ccusNotifSetUnreadCount(ccusNotifGetUnreadCount() - 1);
-}
 
-function ccusNotifMarkAllRead(announcements = []) {
-  const list = Array.isArray(announcements) && announcements.length ? announcements : ccusNotifAnnouncements;
-  const ids = list.map(item => String(item?.id || "")).filter(Boolean);
-  saveSeenIds([...getSeenIds(), ...ids]);
-  ccusNotifSetUnreadCount(0);
-}
+  if (typeof saveSeenIds === "function") {
+    saveSeenIds(seen);
+  }
 
-function ccusNotifSetupButtons() {
-  ccusNotifButtonIds.forEach(id => {
-    const btn = $(id);
-    if (!btn || btn.dataset.ccusNotifBound === "true") return;
+  let current = 0;
+  try {
+    current =
+      typeof getAnnouncementUnreadCount === "function"
+        ? Number(getAnnouncementUnreadCount()) || 0
+        : 0;
+  } catch {
+    current = 0;
+  }
 
-    btn.dataset.ccusNotifBound = "true";
-    btn.addEventListener("click", e => {
-      e.preventDefault(); e.stopPropagation();
-      window.openPage("announcements");
-    });
-  });
+  if (typeof setAnnouncementUnreadCount === "function") {
+    setAnnouncementUnreadCount(Math.max(0, current - 1));
+  }
+
   ccusNotifUpdateBadge();
 }
+
+
+/* =========================================================
+   MARK ALL ANNOUNCEMENTS READ
+========================================================= */
+
+function ccusNotifMarkAllRead(announcements = []) {
+  const list = Array.isArray(announcements) ? announcements : [];
+  const ids = list.map((item) => String(item?.id || "").trim()).filter(Boolean);
+
+  let existing = [];
+  try {
+    existing = typeof getSeenIds === "function" ? getSeenIds() : [];
+  } catch {
+    existing = [];
+  }
+
+  const merged = [...new Set([...existing, ...ids])];
+
+  if (typeof saveSeenIds === "function") {
+    saveSeenIds(merged);
+  }
+
+  if (typeof setAnnouncementUnreadCount === "function") {
+    setAnnouncementUnreadCount(0);
+  }
+
+  ccusNotifUpdateBadge();
+}
+
+
+/* =========================================================
+   ANNOUNCEMENT BUTTONS
+========================================================= */
+
+function ccusNotifSetupButtons() {
+  ccusNotifButtonIds.forEach((id) => {
+    const button = typeof $ === "function" ? $(id) : document.getElementById(id);
+
+    if (!button || button.dataset.ccusNotifBound === "true") {
+      return;
+    }
+
+    button.dataset.ccusNotifBound = "true";
+
+    button.addEventListener("click", (event) => {
+      if (typeof window.openPage === "function") {
+        event.preventDefault();
+        window.openPage("announcements");
+      }
+    });
+  });
+
+  ccusNotifUpdateBadge();
+}
+
+
+/* =========================================================
+   ANNOUNCEMENT LISTENER
+========================================================= */
 
 function ccusNotifLoadAnnouncements(markRead = false) {
   ccusNotifStopListener();
   ccusNotifSetupButtons();
 
+  const _db = typeof db !== "undefined" ? db : window.db;
+  const _query = typeof query !== "undefined" ? query : window.query;
+  const _collection = typeof collection !== "undefined" ? collection : window.collection;
+  const _where = typeof where !== "undefined" ? where : window.where;
+  const _onSnapshot = typeof onSnapshot !== "undefined" ? onSnapshot : window.onSnapshot;
+
+  if (!_db || !_query || !_collection || !_where || !_onSnapshot) {
+    console.error("Firestore instance or required query functions are not globally available.");
+    return;
+  }
+
   try {
-    const q = query(collection(db, "message"), where("active", "==", true));
-    ccusNotifListener = onSnapshot(q, snapshot => {
-      const list = [];
-      snapshot.forEach(doc => {
-        const d = doc.data() || {};
-        if (d.active === true) list.push({ id: doc.id, ...d });
-      });
+    const announcementQuery = _query(
+      _collection(_db, "message"),
+      _where("active", "==", true)
+    );
 
-      list.sort((a, b) => getTime(b.createdAt || b.created) - getTime(a.createdAt || a.created));
-      ccusNotifAnnouncements = list;
+    ccusNotifListener = _onSnapshot(
+      announcementQuery,
+      (snapshot) => {
+        const list = [];
 
-      if (markRead) { ccusNotifMarkAllRead(list); markRead = false; }
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() || {};
+          if (data.active === true) {
+            list.push({
+              id: docSnap.id,
+              ...data
+            });
+          }
+        });
 
-      ccusNotifRenderHomeAnnouncement(list);
-      const container = $("announcementContainer") || $("announcementList");
-      if (container) ccusNotifRenderAnnouncements(list, container);
+        /* Latest announcement first */
+        list.sort(
+          (a, b) =>
+            safeGetTime(b.createdAt || b.created) -
+            safeGetTime(a.createdAt || a.created)
+        );
 
-      ccusNotifUpdateBadge();
-    }, err => { console.error("CCUS Listener error:", err); });
-  } catch (e) { console.error("CCUS listener start error:", e); }
+        ccusNotifAnnouncements = list;
+
+        let initialized = false;
+        try {
+          initialized = localStorage.getItem(SAFE_INITIALIZED_KEY) === "true";
+        } catch {
+          initialized = false;
+        }
+
+        if (!initialized) {
+          ccusNotifMarkAllRead(list);
+          try {
+            localStorage.setItem(SAFE_INITIALIZED_KEY, "true");
+          } catch {}
+        } else if (markRead) {
+          ccusNotifMarkAllRead(list);
+          markRead = false;
+        } else {
+          let seen = [];
+          try {
+            seen = typeof getSeenIds === "function" ? getSeenIds() : [];
+          } catch {
+            seen = [];
+          }
+
+          const seenSet = new Set(seen.map(String));
+          const unread = list.filter((item) => !seenSet.has(String(item.id))).length;
+
+          if (typeof setAnnouncementUnreadCount === "function") {
+            setAnnouncementUnreadCount(unread);
+          }
+        }
+
+        ccusNotifRenderHomeAnnouncement(list);
+
+        const container =
+          typeof $ === "function"
+            ? $("announcementContainer") || $("announcementList")
+            : document.getElementById("announcementContainer") ||
+              document.getElementById("announcementList");
+
+        if (container) {
+          ccusNotifRenderAnnouncements(list, container);
+        }
+
+        ccusNotifUpdateBadge();
+      },
+      (error) => {
+        console.error("Announcement listener error:", error);
+      }
+    );
+  } catch (error) {
+    console.error("Announcement listener start error:", error);
+  }
 }
+
+/* =========================================================
+   STOP ANNOUNCEMENT LISTENER
+========================================================= */
 
 function ccusNotifStopListener() {
   if (typeof ccusNotifListener === "function") {
-    try { ccusNotifListener(); } catch (e) {}
+    try {
+      ccusNotifListener();
+    } catch (error) {
+      console.warn("Announcement listener cleanup error:", error);
+    }
   }
+
   ccusNotifListener = null;
-  ccusNotifStarted = false;
-  window.ccusAnnouncementUnsubscribe = null;
+
+  if (ccusNotifToastTimer) {
+    clearTimeout(ccusNotifToastTimer);
+    ccusNotifToastTimer = null;
+  }
 }
 
+
+/* =========================================================
+   HOME ANNOUNCEMENT
+========================================================= */
+
 function ccusNotifRenderHomeAnnouncement(announcements = []) {
-  const homeMsg = $("homeAnnouncement");
-  if (!homeMsg) return;
+  const element =
+    typeof $ === "function"
+      ? $("homeAnnouncement")
+      : document.getElementById("homeAnnouncement");
+
+  if (!element) return;
 
   if (!announcements.length) {
-    homeMsg.textContent = "No announcements.";
-    homeMsg.style.cursor = "default";
-    homeMsg.onclick = null;
+    element.textContent = "No announcements.";
+    element.style.cursor = "default";
+    element.onclick = null;
     return;
   }
 
   const latest = announcements[0];
-  homeMsg.textContent = latest.message || latest.title || "Announcement";
-  homeMsg.style.cursor = "pointer";
-  homeMsg.onclick = e => {
-    e?.preventDefault?.();
+
+  element.textContent = latest.message || latest.title || "Announcement";
+  element.style.cursor = "pointer";
+
+  element.onclick = (event) => {
+    event?.preventDefault?.();
+
     ccusNotifMarkRead(latest.id);
-    ccusNotifShowModal(latest.message || latest.title || "", latest.important === true, latest.title || "Announcement");
+
+    ccusNotifShowModal(
+      latest.message || latest.title || "",
+      latest.important === true,
+      latest.title || "Announcement"
+    );
   };
 }
 
+
+/* =========================================================
+   ANNOUNCEMENT LIST
+========================================================= */
+
 function ccusNotifRenderAnnouncements(announcements = [], container) {
   if (!container) return;
+
   if (!announcements.length) {
-    container.innerHTML = `<div style="padding:30px 20px;text-align:center;"><div style="font-size:42px;margin-bottom:10px;">📢</div><p style="margin:0;color:#777;">No announcements.</p></div>`;
+    container.innerHTML = `
+      <div style="padding:30px 20px; text-align:center;">
+        <div style="font-size:42px; margin-bottom:10px;">📢</div>
+        <p style="margin:0; color:#777;">No announcements.</p>
+      </div>
+    `;
     return;
   }
 
-  const seen = getSeenIds();
-  container.innerHTML = announcements.map(item => {
-    const id = String(item.id || "");
-    const unread = !seen.includes(id);
-    return `
-      <button type="button" class="announcement-card" data-id="${escapeHtml(id)}" style="width:100%;display:flex;align-items:flex-start;gap:12px;position:relative;box-sizing:border-box;text-align:left;cursor:pointer;border:0;background:transparent;padding:15px;border-radius:16px;margin-bottom:10px;">
-        ${unread ? `<span class="announcement-new-badge" style="position:absolute;top:9px;right:9px;background:#e53935;color:#fff;padding:3px 8px;border-radius:999px;font-size:9px;font-weight:800;z-index:2;">NEW</span>` : ""}
-        <div style="width:42px;height:42px;min-width:42px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${item.important ? "rgba(211,47,47,.10)" : "rgba(240,165,0,.12)"};font-size:21px;">${item.important ? "⚠️" : "📢"}</div>
-        <div class="announcement-content" style="flex:1;min-width:0;padding-right:35px;">
-          <div style="font-size:15px;font-weight:800;line-height:1.35;word-break:break-word;">${escapeHtml(item.title || "Announcement")}</div>
-          <div style="margin-top:5px;color:#666;font-size:13px;line-height:1.5;word-break:break-word;">${escapeHtml(item.message || "")}</div>
-          ${item.important ? `<div style="margin-top:7px;color:#b8860b;font-size:11px;font-weight:800;">⭐ IMPORTANT</div>` : ""}
-        </div>
-      </button>`;
-  }).join("");
+  let seen = [];
+  try {
+    seen = typeof getSeenIds === "function" ? getSeenIds() : [];
+  } catch {
+    seen = [];
+  }
 
-  container.querySelectorAll(".announcement-card").forEach(card => {
-    card.addEventListener("click", e => {
-      e.preventDefault();
+  const seenSet = new Set(seen.map(String));
+
+  container.innerHTML = announcements
+    .map((item) => {
+      const id = String(item.id || "");
+      const unread = !seenSet.has(id);
+      const icon = item.important === true ? "⚠️" : "📢";
+      const iconBackground =
+        item.important === true ? "rgba(211,47,47,.10)" : "rgba(240,165,0,.12)";
+
+      return `
+        <button
+          type="button"
+          class="announcement-card"
+          data-id="${safeEscapeHtml(id)}"
+          style="
+            width:100%;
+            display:flex;
+            align-items:flex-start;
+            gap:12px;
+            position:relative;
+            box-sizing:border-box;
+            text-align:left;
+            cursor:pointer;
+            border:0;
+            background:transparent;
+            padding:15px;
+            border-radius:16px;
+            margin-bottom:10px;
+          "
+        >
+          ${
+            unread
+              ? `
+                <span
+                  class="announcement-new-badge"
+                  style="
+                    position:absolute;
+                    top:9px;
+                    right:9px;
+                    background:#e53935;
+                    color:#fff;
+                    padding:3px 8px;
+                    border-radius:999px;
+                    font-size:9px;
+                    font-weight:800;
+                    z-index:2;
+                  "
+                >
+                  NEW
+                </span>
+              `
+              : ""
+          }
+
+          <div
+            style="
+              width:42px;
+              height:42px;
+              min-width:42px;
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              border-radius:50%;
+              background:${iconBackground};
+              font-size:21px;
+            "
+          >
+            ${icon}
+          </div>
+
+          <div
+            class="announcement-content"
+            style="
+              flex:1;
+              min-width:0;
+              padding-right:35px;
+            "
+          >
+            <div
+              style="
+                font-size:15px;
+                font-weight:800;
+                line-height:1.35;
+                word-break:break-word;
+              "
+            >
+              ${safeEscapeHtml(item.title || "Announcement")}
+            </div>
+
+            <div
+              style="
+                margin-top:5px;
+                color:#666;
+                font-size:13px;
+                line-height:1.5;
+                word-break:break-word;
+              "
+            >
+              ${safeEscapeHtml(item.message || "")}
+            </div>
+
+            ${
+              item.important === true
+                ? `
+                  <div
+                    style="
+                      margin-top:7px;
+                      color:#b8860b;
+                      font-size:11px;
+                      font-weight:800;
+                    "
+                  >
+                    ⭐ IMPORTANT
+                  </div>
+                `
+                : ""
+            }
+          </div>
+        </button>
+      `;
+    })
+    .join("");
+
+  container.querySelectorAll(".announcement-card").forEach((card) => {
+    card.addEventListener("click", (event) => {
+      event.preventDefault();
+
       const id = String(card.dataset.id || "");
-      const ann = announcements.find(i => String(i.id) === id);
-      if (!ann) return;
+      const announcement = announcements.find((item) => String(item.id) === id);
+
+      if (!announcement) return;
 
       ccusNotifMarkRead(id);
       card.querySelector(".announcement-new-badge")?.remove();
-      ccusNotifShowModal(ann.message || ann.title || "", ann.important === true, ann.title || "Announcement");
+
+      ccusNotifShowModal(
+        announcement.message || announcement.title || "",
+        announcement.important === true,
+        announcement.title || "Announcement"
+      );
     });
   });
 }
 
+
+/* =========================================================
+   ANNOUNCEMENT MODAL
+========================================================= */
+
 function ccusNotifShowModal(message, important = false, title = "Announcement") {
-  $("announcementModal")?.remove();
+  document.getElementById("announcementModal")?.remove();
 
   const modal = document.createElement("div");
   modal.id = "announcementModal";
-  modal.style.cssText = "position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;background:rgba(0,0,0,.65);";
+
+  modal.style.cssText = [
+    "position:fixed",
+    "inset:0",
+    "z-index:99999",
+    "display:flex",
+    "align-items:center",
+    "justify-content:center",
+    "padding:20px",
+    "box-sizing:border-box",
+    "background:rgba(0,0,0,.65)"
+  ].join(";");
 
   modal.innerHTML = `
-    <div role="dialog" aria-modal="true" style="width:100%;max-width:500px;max-height:80vh;overflow:auto;box-sizing:border-box;background:#fff;border-radius:18px;padding:22px;box-shadow:0 15px 50px rgba(0,0,0,.3);">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px;">
-        <h3 style="margin:0;flex:1;font-size:19px;line-height:1.4;word-break:break-word;color:#222;">${escapeHtml(title)}</h3>
-        ${important ? `<span style="color:#b8860b;font-size:10px;font-weight:800;white-space:nowrap;">⭐ IMPORTANT</span>` : ""}
+    <div
+      role="dialog"
+      aria-modal="true"
+      style="
+        width:100%;
+        max-width:500px;
+        max-height:80vh;
+        overflow:auto;
+        box-sizing:border-box;
+        background:#fff;
+        border-radius:18px;
+        padding:22px;
+        box-shadow:0 15px 50px rgba(0,0,0,.3);
+      "
+    >
+      <div
+        style="
+          display:flex;
+          align-items:flex-start;
+          justify-content:space-between;
+          gap:12px;
+          margin-bottom:18px;
+        "
+      >
+        <h3
+          style="
+            margin:0;
+            flex:1;
+            font-size:19px;
+            line-height:1.4;
+            word-break:break-word;
+            color:#222;
+          "
+        >
+          ${safeEscapeHtml(title)}
+        </h3>
+
+        ${
+          important
+            ? `
+              <span
+                style="
+                  color:#b8860b;
+                  font-size:10px;
+                  font-weight:800;
+                  white-space:nowrap;
+                "
+              >
+                ⭐ IMPORTANT
+              </span>
+            `
+            : ""
+        }
       </div>
-      <div style="white-space:pre-wrap;line-height:1.7;color:#333;word-break:break-word;font-size:14px;">${escapeHtml(message)}</div>
-      <button id="announcementCloseButton" type="button" style="width:100%;margin-top:22px;padding:13px;border:0;border-radius:12px;background:#f0a500;color:#fff;font-weight:700;font-size:14px;cursor:pointer;">Close</button>
-    </div>`;
+
+      <div
+        style="
+          white-space:pre-wrap;
+          line-height:1.7;
+          color:#333;
+          word-break:break-word;
+          font-size:14px;
+        "
+      >
+        ${safeEscapeHtml(message)}
+      </div>
+
+      <button
+        id="announcementCloseButton"
+        type="button"
+        style="
+          width:100%;
+          margin-top:22px;
+          padding:13px;
+          border:0;
+          border-radius:12px;
+          background:#f0a500;
+          color:#fff;
+          font-weight:700;
+          font-size:14px;
+          cursor:pointer;
+        "
+      >
+        Close
+      </button>
+    </div>
+  `;
 
   document.body.appendChild(modal);
 
   const close = () => modal.remove();
+
   modal.querySelector("#announcementCloseButton")?.addEventListener("click", close);
-  modal.addEventListener("click", e => { if (e.target === modal) close(); });
+
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      close();
+    }
+  });
 }
 
-/* Referral & Team System */
+
+/* =========================================================
+   REFERRAL / TEAM
+========================================================= */
+
+function normalizeTeamDepositLevel(level = {}) {
+  const amount = Number(
+    level.amount ?? level.depositAmount ?? level.price ?? 0
+  );
+
+  const commission = Number(
+    level.commission ?? level.referralCommission ?? level.teamCommission ?? 0
+  );
+
+  const taskLimit = Number(level.taskLimit ?? 0);
+  const rawDisplayName = level.displayName ?? level.name ?? "";
+  const displayName = String(rawDisplayName).trim();
+  const levelNumber = Number(level.level ?? 0);
+
+  let nameText = displayName;
+
+  if (!nameText && levelNumber) {
+    nameText = `Level ${levelNumber}`;
+  }
+
+  if (!nameText && amount > 0) {
+    nameText = `ETB ${safeMoney(amount)}`;
+  }
+
+  if (!nameText) {
+    nameText = "Deposit Level";
+  }
+
+  return {
+    id: String(level.id || ""),
+    name: nameText,
+    displayName: nameText,
+    amount,
+    commission,
+    taskLimit,
+    level: levelNumber,
+    order: Number(level.order ?? level.level ?? 9999),
+    active: level.active !== false
+  };
+}
+
+
+/* =========================================================
+   LOAD REFERRAL
+========================================================= */
+
 async function loadReferral() {
-  if (!currentUser) return;
+  const _currentUser = typeof currentUser !== "undefined" ? currentUser : window.currentUser;
+  const _currentUserData = typeof currentUserData !== "undefined" ? currentUserData : window.currentUserData;
+
+  if (!_currentUser) {
+    return;
+  }
+
   try {
-    setText("referralCodeDisplay", currentUserData?.referralCode || "");
-    let levels = Array.isArray(rechargeLevels) ? rechargeLevels : [];
+    const referralElement =
+      typeof $ === "function"
+        ? $("referralCodeDisplay")
+        : document.getElementById("referralCodeDisplay");
+
+    if (referralElement) {
+      referralElement.textContent = _currentUserData?.referralCode || "";
+    }
+
+    let levels = typeof rechargeLevels !== "undefined" && Array.isArray(rechargeLevels)
+      ? rechargeLevels
+      : window.rechargeLevels || [];
 
     if (!levels.length) {
-      const snap = await getDocs(collection(db, "rechargeLevels"));
-      levels = [];
-      snap.forEach(docSnap => levels.push(normalizeTeamDepositLevel({ id: docSnap.id, ...docSnap.data() })));
-      rechargeLevels = levels;
+      const _db = typeof db !== "undefined" ? db : window.db;
+      const _collection = typeof collection !== "undefined" ? collection : window.collection;
+      const _getDocs = typeof getDocs !== "undefined" ? getDocs : window.getDocs;
+
+      if (_db && _collection && _getDocs) {
+        const snapshot = await _getDocs(_collection(_db, "rechargeLevels"));
+        levels = [];
+        snapshot.forEach((docSnap) => {
+          levels.push(
+            normalizeTeamDepositLevel({
+              id: docSnap.id,
+              ...docSnap.data()
+            })
+          );
+        });
+        window.rechargeLevels = levels;
+      }
     }
 
     levels = levels
       .map(normalizeTeamDepositLevel)
-      .filter(level => level.amount > 0 && level.active !== false)
-      .sort((a, b) => Number(a.order ?? 9999) - Number(b.order ?? 9999) || Number(a.amount || 0) - Number(b.amount || 0));
+      .filter((level) => level.amount > 0 && level.active !== false)
+      .sort((a, b) => a.order - b.order || a.amount - b.amount);
 
     renderTeamDepositLevels(levels);
-  } catch (error) { renderTeamDepositLevels([]); }
+  } catch (error) {
+    console.error("Referral loading error:", error);
+    renderTeamDepositLevels([]);
+  }
+
   loadTeamCommissionHistory();
 }
 
-function normalizeTeamDepositLevel(level = {}) {
-  const amount = Number(level.amount ?? level.depositAmount ?? 0);
-  const commission = Number(level.commission ?? level.referralCommission ?? 0);
-  const taskLimit = Number(level.taskLimit ?? 0);
-  const displayName = String(level.displayName ?? level.name ?? "");
-  const nameText = displayName || (amount > 0 ? `ETB ${money(amount)}` : "Deposit Level");
 
-  return { id: String(level.id || ""), name: nameText, displayName: nameText, amount, commission, taskLimit, order: Number(level.order ?? 9999), active: level.active !== false };
-}
+/* =========================================================
+   TEAM DEPOSIT LEVELS
+========================================================= */
 
 function renderTeamDepositLevels(levels = []) {
-  const container = $("teamDepositLevels");
+  const container =
+    typeof $ === "function"
+      ? $("teamDepositLevels")
+      : document.getElementById("teamDepositLevels");
+
   if (!container) return;
 
-  const validLevels = Array.isArray(levels) ? levels.map(normalizeTeamDepositLevel).filter(l => Number(l.amount) > 0 && l.active !== false) : [];
+  const validLevels = Array.isArray(levels)
+    ? levels
+        .map(normalizeTeamDepositLevel)
+        .filter((level) => level.amount > 0 && level.active !== false)
+    : [];
+
   if (!validLevels.length) {
-    container.innerHTML = `<div class="empty-transactions" style="text-align:center;padding:20px;"><h3>No Deposit Levels Available</h3></div>`;
+    container.innerHTML = `
+      <div class="empty-transactions" style="text-align:center; padding:20px;">
+        <h3>No Deposit Levels Available</h3>
+      </div>
+    `;
     return;
   }
 
-  container.innerHTML = validLevels.map((level, index) => `
-    <div class="team-deposit-level-card" style="margin-bottom:12px;padding:15px;border:1px solid #e5e5e5;border-radius:12px;background:#fff;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div style="min-width:42px;height:42px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#fff3cd;color:#856404;font-weight:800;">L${index + 1}</div>
-          <div>
-            <div style="font-weight:700;font-size:15px;">${escapeHtml(level.displayName)}</div>
-            <div style="font-size:12px;color:#777;">Team Deposit Level</div>
+  container.innerHTML = validLevels
+    .map(
+      (level, index) => `
+        <div
+          class="team-deposit-level-card"
+          style="
+            margin-bottom:12px;
+            padding:15px;
+            border:1px solid #e5e5e5;
+            border-radius:12px;
+            background:#fff;
+          "
+        >
+          <div
+            style="
+              display:flex;
+              justify-content:space-between;
+              align-items:center;
+              margin-bottom:12px;
+              gap:10px;
+            "
+          >
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div
+                style="
+                  min-width:42px;
+                  height:42px;
+                  display:flex;
+                  align-items:center;
+                  justify-content:center;
+                  border-radius:50%;
+                  background:#fff3cd;
+                  color:#856404;
+                  font-weight:800;
+                "
+              >
+                L${index + 1}
+              </div>
+
+              <div>
+                <div style="font-weight:700; font-size:15px;">
+                  ${safeEscapeHtml(level.displayName)}
+                </div>
+                <div style="font-size:12px; color:#777;">
+                  Team Deposit Level
+                </div>
+              </div>
+            </div>
+
+            <span
+              style="
+                font-size:11px;
+                color:#198754;
+                background:#e8f7ee;
+                padding:4px 8px;
+                border-radius:12px;
+              "
+            >
+              Active
+            </span>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div style="padding:10px; border-radius:8px; background:#f8f8f8;">
+              <div style="font-size:11px; color:#777;">Required Deposit</div>
+              <strong>ETB ${safeMoney(level.amount)}</strong>
+            </div>
+
+            <div style="padding:10px; border-radius:8px; background:#f8f8f8;">
+              <div style="font-size:11px; color:#777;">Referral Commission</div>
+              <strong style="color:#198754;">
+                ETB ${safeMoney(level.commission)}
+              </strong>
+            </div>
           </div>
         </div>
-        <span style="font-size:11px;color:#198754;background:#e8f7ee;padding:4px 8px;border-radius:12px;">Active</span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div style="padding:10px;border-radius:8px;background:#f8f8f8;"><div style="font-size:11px;color:#777;">Required Deposit</div><strong>ETB ${money(level.amount)}</strong></div>
-        <div style="padding:10px;border-radius:8px;background:#f8f8f8;"><div style="font-size:11px;color:#777;">Referral Commission</div><strong style="color:#198754;">ETB ${money(level.commission)}</strong></div>
-      </div>
-    </div>`).join("");
+      `
+    )
+    .join("");
 }
+
+
+/* =========================================================
+   TEAM COMMISSION HISTORY
+========================================================= */
 
 function loadTeamCommissionHistory() {
-  const container = $("teamCommissionHistory");
-  if (!container || !currentUser) return;
-  if (unsubs.teamCommissions) unsubs.teamCommissions();
+  const container =
+    typeof $ === "function"
+      ? $("teamCommissionHistory")
+      : document.getElementById("teamCommissionHistory");
 
-  try {
-    unsubs.teamCommissions = onSnapshot(query(collection(db, "teamCommissions"), where("referrerId", "==", currentUser.uid)), snapshot => {
-      const records = [];
-      snapshot.forEach(docSnap => records.push({ id: docSnap.id, ...docSnap.data() }));
-      records.sort((a, b) => getTime(b.createdAt) - getTime(a.createdAt));
-      renderTeamCommissionHistory(records);
-    });
-  } catch (error) { console.error("Team Commission Setup Error:", error); }
-}
+  const _currentUser = typeof currentUser !== "undefined" ? currentUser : window.currentUser;
 
-function renderTeamCommissionHistory(records = []) {
-  const container = $("teamCommissionHistory");
-  if (!container) return;
-  if (!Array.isArray(records) || !records.length) {
-    container.innerHTML = `<div class="empty-transactions" style="text-align:center;padding:20px;"><h3>No Commission Yet</h3></div>`;
+  if (!container || !_currentUser) {
     return;
   }
 
-  container.innerHTML = records.map(record => {
-    const status = String(record.status || "approved").toLowerCase();
-    const depositAmount = Number(record.depositAmount ?? record.amount ?? 0);
-    const commissionAmount = Number(record.commissionAmount ?? record.commission ?? 0);
+  if (typeof stopListener === "function") {
+    try {
+      stopListener("teamCommissions");
+    } catch {}
+  }
 
-    return `
-      <div class="history-item ${escapeHtml(status)}" style="display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #eee;">
-        <div class="history-info">
-          <strong>${escapeHtml(record.depositLevel || "Deposit Level")}</strong>
-          <span style="display:block;margin-top:4px;color:#555;font-size:13px;">Member: ${escapeHtml(record.referredUserName || "Team Member")}</span>
-        </div>
-        <div class="history-right" style="text-align:right;">
-          <strong style="color:#198754;">+ ETB ${money(commissionAmount)}</strong>
-          <span class="history-status ${escapeHtml(status)}" style="display:block;margin-top:5px;font-size:11px;">${escapeHtml(status)}</span>
-        </div>
-      </div>`;
-  }).join("");
+  if (typeof unsubs !== "undefined" && typeof unsubs.teamCommissions === "function") {
+    try {
+      unsubs.teamCommissions();
+    } catch {}
+    unsubs.teamCommissions = null;
+  }
+
+  const _db = typeof db !== "undefined" ? db : window.db;
+  const _query = typeof query !== "undefined" ? query : window.query;
+  const _collection = typeof collection !== "undefined" ? collection : window.collection;
+  const _where = typeof where !== "undefined" ? where : window.where;
+  const _onSnapshot = typeof onSnapshot !== "undefined" ? onSnapshot : window.onSnapshot;
+
+  if (!_db || !_query || !_collection || !_where || !_onSnapshot) {
+    console.error("Firestore queries not available for team commission history.");
+    return;
+  }
+
+  try {
+    const commissionQuery = _query(
+      _collection(_db, "teamCommissions"),
+      _where("referrerId", "==", _currentUser.uid)
+    );
+
+    const unsubscribe = _onSnapshot(
+      commissionQuery,
+      (snapshot) => {
+        const records = [];
+
+        snapshot.forEach((docSnap) => {
+          records.push({
+            id: docSnap.id,
+            ...docSnap.data()
+          });
+        });
+
+        records.sort((a, b) => safeGetTime(b.createdAt) - safeGetTime(a.createdAt));
+
+        renderTeamCommissionHistory(records);
+      },
+      (error) => {
+        console.error("Team commission history error:", error);
+        container.innerHTML = `
+          <div class="empty-transactions" style="text-align:center; padding:20px;">
+            <h3>Unable to load commission history</h3>
+          </div>
+        `;
+      }
+    );
+
+    if (typeof unsubs !== "undefined") {
+      unsubs.teamCommissions = unsubscribe;
+    }
+  } catch (error) {
+    console.error("Team commission listener error:", error);
+    container.innerHTML = `
+      <div class="empty-transactions" style="text-align:center; padding:20px;">
+        <h3>Unable to load commission history</h3>
+      </div>
+    `;
+  }
 }
 
-window.copyReferralCode = async () => {
-  const code = currentUserData?.referralCode;
-  if (!code) return alert("Referral Code not found.");
+
+/* =========================================================
+   RENDER TEAM COMMISSION HISTORY
+========================================================= */
+
+function renderTeamCommissionHistory(records = []) {
+  const container =
+    typeof $ === "function"
+      ? $("teamCommissionHistory")
+      : document.getElementById("teamCommissionHistory");
+
+  if (!container) return;
+
+  if (!records.length) {
+    container.innerHTML = `
+      <div class="empty-transactions" style="text-align:center; padding:20px;">
+        <div style="font-size:32px; margin-bottom:8px;">👥</div>
+        <h3>No Commission Yet</h3>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = records
+    .map((record) => {
+      const status = String(record.status || "approved")
+        .toLowerCase()
+        .trim();
+
+      const commissionAmount = Number(
+        record.commissionAmount ?? record.commission ?? 0
+      );
+
+      const depositLevel = String(
+        record.depositLevel ?? record.levelName ?? record.level ?? "Deposit Level"
+      );
+
+      const referredUserName = String(
+        record.referredUserName ?? record.referredName ?? "Team Member"
+      );
+
+      return `
+        <div
+          class="history-item ${safeEscapeHtml(status)}"
+          style="
+            display:flex;
+            justify-content:space-between;
+            gap:12px;
+            padding:13px 0;
+            border-bottom:1px solid #eee;
+          "
+        >
+          <div class="history-info">
+            <strong>${safeEscapeHtml(depositLevel)}</strong>
+            <span style="display:block; margin-top:4px; color:#555; font-size:13px;">
+              Member: ${safeEscapeHtml(referredUserName)}
+            </span>
+          </div>
+
+          <div class="history-right" style="text-align:right;">
+            <strong style="color:#198754;">
+              + ETB ${safeMoney(commissionAmount)}
+            </strong>
+            <span
+              class="history-status ${safeEscapeHtml(status)}"
+              style="display:block; margin-top:5px; font-size:11px;"
+            >
+              ${typeof getStatusIcon === "function" ? getStatusIcon(status) : ""}
+              ${safeEscapeHtml(status)}
+            </span>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+
+/* =========================================================
+   COPY REFERRAL CODE
+========================================================= */
+
+window.copyReferralCode = async function () {
+  const _currentUserData = typeof currentUserData !== "undefined" ? currentUserData : window.currentUserData;
+  const code = _currentUserData?.referralCode;
+
+  if (!code) {
+    alert("Referral Code not found.");
+    return;
+  }
+
   try {
-    await navigator.clipboard.writeText(code);
-    alert("Referral Code copied successfully!");
-  } catch { alert("Referral Code: " + code); }
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      await navigator.clipboard.writeText(code);
+      alert("Referral Code copied successfully!");
+    } else {
+      alert("Referral Code: " + code);
+    }
+  } catch (error) {
+    console.error("Copy referral code error:", error);
+    alert("Referral Code: " + code);
+  }
 };
 
-/* Global Exports & Initialization */
+
+/* =========================================================
+   ADMIN NAVIGATION
+========================================================= */
+
+function adminNavigate(page = "dashboard") {
+  if (!page) {
+    page = "dashboard";
+  }
+
+  document.querySelectorAll(".admin-page-content").forEach((section) => {
+    section.classList.add("hidden");
+  });
+
+  const pageMap = {
+    dashboard: "adminDashboardPage",
+    recharge: "adminRechargeSection",
+    withdraw: "adminWithdrawSection",
+    vip: "adminVIPLevelsSection",
+    rechargeLevels: "adminRechargeLevelsSection",
+    withdrawLevels: "adminWithdrawLevelsSection",
+    paymentMethods: "adminPaymentMethodsSection",
+    users: "adminUsersSection",
+    rewards: "adminRewardsSection",
+    tasks: "adminTasksSection",
+    announcements: "adminAnnouncementsSection",
+    calendar: "adminCalendarSection",
+    incomeLevels: "adminIncomeLevelsSection"
+  };
+
+  const targetId = pageMap[page];
+
+  if (!targetId) {
+    console.warn("Unknown admin page:", page);
+    return;
+  }
+
+  const target = document.getElementById(targetId);
+
+  if (!target) {
+    console.warn("Admin section not found:", targetId);
+    return;
+  }
+
+  target.classList.remove("hidden");
+}
+
+
+/* =========================================================
+   GLOBAL EXPORTS & BINDINGS
+========================================================= */
+
+window.adminNavigate = adminNavigate;
+
 Object.assign(window, {
-  loadUserData: updateUserUI, startUserListener, updateUserUI, cleanupListeners, loadDailyTasks, loadVIPLevels, loadRechargeLevels, loadWithdrawLevels, loadRechargeHistory, loadWithdrawHistory, loadProfile: updateUserUI, loadReferral, renderTeamDepositLevels, loadTeamCommissionHistory, loadAnnouncements: ccusNotifLoadAnnouncements, getTodayOperatingStatus, loadPersonalInformation, savePersonalInformation,
-  updateAnnouncementNotificationCount: ccusNotifUpdateBadge, markAllAnnouncementsAsRead: ccusNotifMarkAllRead, setupAnnouncementNotificationButtons: ccusNotifSetupButtons
+  loadUserData: typeof updateUserUI === "function" ? updateUserUI : undefined,
+  startUserListener: typeof startUserListener === "function" ? startUserListener : undefined,
+  updateUserUI: typeof updateUserUI === "function" ? updateUserUI : undefined,
+  cleanupListeners: typeof cleanupListeners === "function" ? cleanupListeners : undefined,
+  loadDailyTasks: typeof loadDailyTasks === "function" ? loadDailyTasks : undefined,
+  loadVIPLevels: typeof loadVIPLevels === "function" ? loadVIPLevels : undefined,
+  loadIncomeLevels: typeof loadIncomeLevels === "function" ? loadIncomeLevels : undefined,
+  loadRechargeLevels: typeof loadRechargeLevels === "function" ? loadRechargeLevels : undefined,
+  loadWithdrawLevels: typeof loadWithdrawLevels === "function" ? loadWithdrawLevels : undefined,
+  loadRechargeHistory: typeof loadRechargeHistory === "function" ? loadRechargeHistory : undefined,
+  loadWithdrawHistory: typeof loadWithdrawHistory === "function" ? loadWithdrawHistory : undefined,
+  loadProfile: typeof updateUserUI === "function" ? updateUserUI : undefined,
+  loadReferral,
+  renderTeamDepositLevels,
+  loadTeamCommissionHistory,
+  loadAnnouncements: ccusNotifLoadAnnouncements,
+  getTodayOperatingStatus: typeof getTodayOperatingStatus === "function" ? getTodayOperatingStatus : undefined,
+  loadPersonalInformation: typeof loadPersonalInformation === "function" ? loadPersonalInformation : undefined,
+  savePersonalInformation: typeof window.savePersonalInformation === "function" ? window.savePersonalInformation : undefined,
+  updateAnnouncementNotificationCount: ccusNotifUpdateBadge,
+  markAllAnnouncementsAsRead: ccusNotifMarkAllRead,
+  setupAnnouncementNotificationButtons: ccusNotifSetupButtons,
+  adminNavigate
 });
+
+
+/* =========================================================
+   ANNOUNCEMENT UNSUBSCRIBE COMPATIBILITY
+========================================================= */
 
 Object.defineProperty(window, "ccusAnnouncementUnsubscribe", {
   configurable: true,
   get: () => ccusNotifListener,
-  set: v => { if (typeof v === "function") ccusNotifListener = v; }
+  set: (value) => {
+    if (typeof value === "function") {
+      if (typeof ccusNotifListener === "function") {
+        try {
+          ccusNotifListener();
+        } catch {}
+      }
+      ccusNotifListener = value;
+    }
+  }
 });
 
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ccusNotifSetupButtons);
-else ccusNotifSetupButtons();
 
-ccusNotifUpdateBadge();
-console.log("CCUS User App initialized (Optimized & Cleaned).");
+/* =========================================================
+   ANNOUNCEMENT GLOBAL COMPATIBILITY
+========================================================= */
+
+window.loadAnnouncements = ccusNotifLoadAnnouncements;
+
+
+/* =========================================================
+   DOM READY
+========================================================= */
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    ccusNotifSetupButtons();
+    ccusNotifUpdateBadge();
+  });
+} else {
+  ccusNotifSetupButtons();
+  ccusNotifUpdateBadge();
+}
+
+console.log("CCUS User App initialized successfully.");
