@@ -109,6 +109,9 @@
           <button type="button" class="action-btn" onclick="window.openPage('tasks')"><span>✅</span><small>Tasks</small></button>
           <button type="button" class="action-btn" onclick="window.openPage('referral')"><span>👥</span><small>Invite</small></button>
           <button type="button" class="action-btn" onclick="window.openPage('vip')"><span>👑</span><small>VIP</small></button>
+          <button type="button" class="action-btn" onclick="window.openPage('income')">
+  <span>💰</span><small>Income</small>
+</button>
           <button type="button" class="action-btn" onclick="window.openPage('profile')"><span>⋯</span><small>More</small></button>
         </div>
       </div>
@@ -240,67 +243,412 @@
       </div>
     </section>
 
-    <!-- DEPOSIT PAGE -->
-    <section id="depositPage" class="simple-page hidden">
-      <div class="simple-header">
-        <button type="button" class="back-btn" onclick="window.openPage('wallet')">←</button>
-        <h2>Recharge</h2>
-      </div>
-      <div class="simple-content">
-        <div id="rechargeStep1" class="recharge-step">
-          <div class="simple-card">
-            <h3>Recharge Amount</h3>
-            <p></p>
-            <div id="rechargeAmountList" class="amount-grid"></div>
-            <div class="input-group recharge-input">
-              <label for="rechargeAmount">Custom Amount</label>
-              <input type="number" id="rechargeAmount" name="rechargeAmount" placeholder="Enter amount" min="1" step="0.01" inputmode="decimal">
-            </div>
-            <button type="button" class="primary-btn" id="goToPaymentMethodBtn" onclick="window.goToPaymentMethod()">Next</button>
-          </div>
-        </div>
-        <div id="rechargeStep2" class="recharge-step hidden">
-          <div class="simple-card">
-            <h3>Select Payment Method</h3>
-            <p>Choose your preferred payment method.</p>
-            <div id="depositPaymentMethods"></div>
-            <div class="selected-amount"><span>Amount to Transfer</span><strong id="transferAmount">ETB 0.00</strong></div>
-            <button type="button" class="primary-btn" id="goToPaymentDetailsBtn" onclick="window.goToPaymentDetails()">Continue</button>
-            <button type="button" class="secondary-btn" onclick="window.backToAmountStep()">Back</button>
-          </div>
-        </div>
-        <div id="rechargeStep3" class="recharge-step hidden">
-          <div class="simple-card">
-            <h3>Payment Details</h3>
-            <p>Transfer the exact amount to the account shown below.</p>
-            <div class="account-box">
-              <div class="account-row"><span>Payment Method</span><strong id="finalPaymentMethod">—</strong></div>
-              <div class="account-row"><span>Account Name</span><strong id="finalAccountName">—</strong></div>
-              <div class="account-row"><span>Account Number</span><strong id="finalAccountNumber">—</strong></div>
-              <div class="account-row highlight"><span>Amount to Transfer</span><strong id="finalTransferAmount">ETB 0.00</strong></div>
-            </div>
-            <div class="input-group recharge-input">
-              <label for="transactionId">Transaction ID / Reference Number</label>
-              <input type="text" id="transactionId" name="transactionId" placeholder="Enter transaction ID" autocomplete="off" maxlength="100">
-            </div>
-            <button type="button" class="primary-btn" id="submitRechargeBtn" onclick="window.submitRecharge()">Submit Recharge</button>
-            <button type="button" class="secondary-btn" onclick="window.backToPaymentMethod()">Back</button>
-            <p id="rechargeMessage" class="admin-message" aria-live="polite"></p>
-          </div>
-        </div>
-        <div id="rechargePending" class="recharge-step hidden">
-          <div class="simple-card recharge-success">
-            <div class="success-icon">✓</div>
-            <h3>Recharge Submitted</h3>
-            <p>Your recharge request has been submitted successfully.</p>
-            <div class="pending-box"><span>Status</span><strong>Pending</strong></div>
-            <p class="small-note">Your Total Recharge will not change until Admin approves this recharge.</p>
-            <button type="button" class="primary-btn" onclick="window.openPage('wallet')">Back to Wallet</button>
-          </div>
-        </div>
-      </div>
-    </section>
+<!-- DEPOSIT PAGE -->
+<section id="depositPage" class="simple-page hidden">
 
+  <div class="simple-header">
+
+    <button
+      type="button"
+      class="back-btn"
+      onclick="window.openPage('wallet')"
+    >
+      ←
+    </button>
+
+    <h2>Recharge</h2>
+
+  </div>
+
+
+  <div class="simple-content">
+
+
+    <!-- =================================================
+         RECHARGE STEP 1
+    ================================================== -->
+
+    <div
+      id="rechargeStep1"
+      class="recharge-step"
+    >
+
+      <div class="simple-card">
+
+        <h3>
+          Recharge Amount
+        </h3>
+
+        <p>
+          Select a recharge level or enter a custom amount.
+        </p>
+
+
+        <!-- =================================================
+             NORMAL RECHARGE LEVELS
+        ================================================== -->
+
+        <div
+          id="rechargeAmountList"
+          class="amount-grid"
+        ></div>
+
+
+        <!-- =================================================
+             UPGRADE DEPOSIT
+             -------------------------------------------------
+             app.js dynamically fills this container.
+
+             Example:
+
+             Current Approved Total: ETB 1,600
+             Next Level: ETB 6,000
+             Upgrade Deposit: ETB 4,400
+        ================================================== -->
+
+        <div
+          id="upgradeDepositContainer"
+          class="upgrade-deposit-container"
+        ></div>
+
+
+        <!-- =================================================
+             CUSTOM AMOUNT
+        ================================================== -->
+
+        <div
+          class="input-group recharge-input"
+        >
+
+          <label
+            for="rechargeAmount"
+          >
+            Custom Amount
+          </label>
+
+          <input
+            type="number"
+            id="rechargeAmount"
+            name="rechargeAmount"
+            placeholder="Enter amount"
+            min="1"
+            step="0.01"
+            inputmode="decimal"
+            autocomplete="off"
+          >
+
+        </div>
+
+
+        <!-- =================================================
+             NEXT
+        ================================================== -->
+
+        <button
+          type="button"
+          class="primary-btn"
+          id="goToPaymentMethodBtn"
+          onclick="window.goToPaymentMethod()"
+        >
+          Next
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <!-- =================================================
+         RECHARGE STEP 2
+    ================================================== -->
+
+    <div
+      id="rechargeStep2"
+      class="recharge-step hidden"
+    >
+
+      <div class="simple-card">
+
+        <h3>
+          Select Payment Method
+        </h3>
+
+        <p>
+          Choose your preferred payment method.
+        </p>
+
+
+        <div
+          id="depositPaymentMethods"
+        ></div>
+
+
+        <div
+          class="selected-amount"
+        >
+
+          <span>
+            Amount to Transfer
+          </span>
+
+          <strong
+            id="transferAmount"
+          >
+            ETB 0.00
+          </strong>
+
+        </div>
+
+
+        <button
+          type="button"
+          class="primary-btn"
+          id="goToPaymentDetailsBtn"
+          onclick="window.goToPaymentDetails()"
+        >
+          Continue
+        </button>
+
+
+        <button
+          type="button"
+          class="secondary-btn"
+          onclick="window.backToAmountStep()"
+        >
+          Back
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <!-- =================================================
+         RECHARGE STEP 3
+    ================================================== -->
+
+    <div
+      id="rechargeStep3"
+      class="recharge-step hidden"
+    >
+
+      <div class="simple-card">
+
+        <h3>
+          Payment Details
+        </h3>
+
+        <p>
+          Transfer the exact amount to the account shown below.
+        </p>
+
+
+        <!-- =================================================
+             PAYMENT ACCOUNT DETAILS
+        ================================================== -->
+
+        <div
+          class="account-box"
+        >
+
+          <div
+            class="account-row"
+          >
+
+            <span>
+              Payment Method
+            </span>
+
+            <strong
+              id="finalPaymentMethod"
+            >
+              —
+            </strong>
+
+          </div>
+
+
+          <div
+            class="account-row"
+          >
+
+            <span>
+              Account Name
+            </span>
+
+            <strong
+              id="finalAccountName"
+            >
+              —
+            </strong>
+
+          </div>
+
+
+          <div
+            class="account-row"
+          >
+
+            <span>
+              Account Number
+            </span>
+
+            <strong
+              id="finalAccountNumber"
+            >
+              —
+            </strong>
+
+          </div>
+
+
+          <div
+            class="account-row highlight"
+          >
+
+            <span>
+              Amount to Transfer
+            </span>
+
+            <strong
+              id="finalTransferAmount"
+            >
+              ETB 0.00
+            </strong>
+
+          </div>
+
+        </div>
+
+
+        <!-- =================================================
+             TRANSACTION ID
+        ================================================== -->
+
+        <div
+          class="input-group recharge-input"
+        >
+
+          <label
+            for="transactionId"
+          >
+            Transaction ID / Reference Number
+          </label>
+
+          <input
+            type="text"
+            id="transactionId"
+            name="transactionId"
+            placeholder="Enter transaction ID"
+            autocomplete="off"
+            maxlength="100"
+          >
+
+        </div>
+
+
+        <!-- =================================================
+             SUBMIT
+        ================================================== -->
+
+        <button
+          type="button"
+          class="primary-btn"
+          id="submitRechargeBtn"
+          onclick="window.submitRecharge()"
+        >
+          Submit Recharge
+        </button>
+
+
+        <button
+          type="button"
+          class="secondary-btn"
+          onclick="window.backToPaymentMethod()"
+        >
+          Back
+        </button>
+
+
+        <p
+          id="rechargeMessage"
+          class="admin-message"
+          aria-live="polite"
+        ></p>
+
+      </div>
+
+    </div>
+
+
+    <!-- =================================================
+         RECHARGE PENDING
+    ================================================== -->
+
+    <div
+      id="rechargePending"
+      class="recharge-step hidden"
+    >
+
+      <div
+        class="simple-card recharge-success"
+      >
+
+        <div
+          class="success-icon"
+        >
+          ✓
+        </div>
+
+
+        <h3>
+          Recharge Submitted
+        </h3>
+
+
+        <p>
+          Your recharge request has been submitted successfully.
+        </p>
+
+
+        <div
+          class="pending-box"
+        >
+
+          <span>
+            Status
+          </span>
+
+          <strong>
+            Pending
+          </strong>
+
+        </div>
+
+
+        <p
+          class="small-note"
+        >
+          Your Total Recharge will not change until Admin approves this recharge.
+        </p>
+
+
+        <button
+          type="button"
+          class="primary-btn"
+          onclick="window.openPage('wallet')"
+        >
+          Back to Wallet
+        </button>
+
+      </div>
+
+    </div>
+
+
+  </div>
+
+</section>
     <!-- PROFILE PAGE -->
     <section id="profilePage" class="profile-page hidden">
       <div class="profile-header">
@@ -497,7 +845,80 @@
         </div>
       </div>
     </section>
+<!-- =========================================================
+     INCOME PAGE
+========================================================= -->
 
+<section id="incomePage" class="simple-page hidden">
+
+  <div class="simple-header">
+
+    <button
+      type="button"
+      class="back-btn"
+      onclick="window.openPage('home')"
+    >
+      ←
+    </button>
+
+    <h2>Income</h2>
+
+  </div>
+
+
+  <div class="simple-content">
+
+    <div class="simple-card">
+
+      <div class="large-icon">💰</div>
+
+      <h3>Income Levels</h3>
+
+      <p>
+        Daily, monthly and yearly income information
+        for each level.
+      </p>
+
+    </div>
+
+
+    <div class="income-table-wrapper">
+
+      <table class="income-table">
+
+        <thead>
+          <tr>
+            <th>Level</th>
+            <th>Price</th>
+            <th>Daily</th>
+            <th>Monthly</th>
+            <th>Yearly</th>
+          </tr>
+        </thead>
+
+        <tbody
+          id="incomeLevelsTableBody"
+          aria-live="polite"
+        >
+
+          <tr>
+            <td
+              colspan="5"
+              style="text-align:center;padding:20px;"
+            >
+              Loading income levels...
+            </td>
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+</section>
     <!-- BOTTOM NAVIGATION -->
     <nav id="bottomNav" class="bottom-nav hidden">
       <button type="button" class="nav-item active" data-page="home" onclick="window.openPage('home')"><span>🏠</span><small>Home</small></button>
