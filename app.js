@@ -730,6 +730,7 @@ const signupUser = async () => {
     );
   }
 };
+
 /* =========================================================
 CCUS LOGIN
 GLOBAL FUNCTION
@@ -1875,228 +1876,919 @@ window.resetRechargePage = function () {
 };
 
 /* =========================================================
-   PAYMENT METHODS & STEPS
+   CCUS - PAYMENT METHODS & RECHARGE STEPS
+   STABLE VERSION
+========================================================= */
+
+/* =========================================================
+   LOAD USER PAYMENT METHODS
 ========================================================= */
 
 function loadUserPaymentMethods() {
+
   const container = $("depositPaymentMethods");
-  if (!container) return;
+
+  if (!container) {
+    console.warn(
+      "depositPaymentMethods container not found."
+    );
+    return;
+  }
+
+  /* ---------------------------------------------------------
+     Stop previous listener
+  --------------------------------------------------------- */
 
   stopListener("userPaymentMethods");
 
-  unsubs.userPaymentMethods = onSnapshot(
-    collection(db, "settings", "paymentMethods", "methods"),
-    snapshot => {
-      userPaymentMethods = [];
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data() || {};
-        if (data.active !== false) {
-          userPaymentMethods.push({
-            id: docSnap.id,
-            ...data,
-            name: data.name || "Payment"
-          });
-        }
-      });
+  /* ---------------------------------------------------------
+     Clear old selected method
+  --------------------------------------------------------- */
 
-      userPaymentMethods.sort((a, b) => Number(a.order ?? 9999) - Number(b.order ?? 9999));
-      renderPaymentMethods();
-    },
-    error => {
-      console.error("Payment method error:", error);
-      container.innerHTML = `<p style="text-align:center;color:#c62828;">Unable to load payment methods.</p>`;
+  selectedDepositPaymentMethod = null;
+
+  /* ---------------------------------------------------------
+     Firestore listener
+
+     PATH:
+     settings/paymentMethods/methods
+  --------------------------------------------------------- */
+
+  const paymentMethodsRef =
+    collection(
+      db,
+      "settings",
+      "paymentMethods",
+      "methods"
+    );
+
+  unsubs.userPaymentMethods =
+    onSnapshot(
+
+      paymentMethodsRef,
+
+      snapshot => {
+
+        userPaymentMethods = [];
+
+        snapshot.forEach(docSnap => {
+
+          const data =
+            docSnap.data() || {};
+
+          /* -----------------------------------------------
+             Ignore disabled methods
+          ------------------------------------------------ */
+
+          if (data.active === false) {
+            return;
+          }
+
+          userPaymentMethods.push({
+
+            id: docSnap.id,
+
+            ...data,
+
+            name:
+              String(
+                data.name ||
+                "Payment"
+              )
+
+          });
+
+        });
+
+
+        /* -------------------------------------------------
+           SORT BY ADMIN ORDER
+        ------------------------------------------------- */
+
+        userPaymentMethods.sort(
+          (a, b) =>
+            Number(a.order ?? 9999)
+            -
+            Number(b.order ?? 9999)
+        );
+
+
+        /* -------------------------------------------------
+           RENDER
+        ------------------------------------------------- */
+
+        renderPaymentMethods();
+
+      },
+
+      error => {
+
+        console.error(
+          "Payment method error:",
+          error
+        );
+
+        userPaymentMethods = [];
+
+        container.innerHTML = `
+          <p
+            style="
+              text-align:center;
+              color:#c62828;
+              padding:12px;
+            "
+          >
+            Unable to load payment methods.
+          </p>
+        `;
+
+      }
+    );
+}
+
+
+/* =========================================================
+   RENDER PAYMENT METHODS
+========================================================= */
+
+function renderPaymentMethods() {
+
+  const container =
+    $("depositPaymentMethods");
+
+  if (!container) {
+    return;
+  }
+
+
+  /* ---------------------------------------------------------
+     No methods
+  --------------------------------------------------------- */
+
+  if (!userPaymentMethods.length) {
+
+    container.innerHTML = `
+      <p
+        style="
+          text-align:center;
+          color:#777;
+          padding:12px;
+        "
+      >
+        No payment methods available.
+      </p>
+    `;
+
+    return;
+  }
+
+
+  /* ---------------------------------------------------------
+     Clear
+  --------------------------------------------------------- */
+
+  container.innerHTML = "";
+
+
+  /* ---------------------------------------------------------
+     Render each method
+  --------------------------------------------------------- */
+
+  userPaymentMethods.forEach(
+    method => {
+
+      const button =
+        document.createElement(
+          "button"
+        );
+
+      button.type = "button";
+
+      button.className =
+        "payment-method-btn";
+
+      button.style.cssText =
+        `
+          width:100%;
+          padding:10px;
+          margin-bottom:8px;
+          border:1px solid #ccc;
+          border-radius:6px;
+          background:#fff;
+          cursor:pointer;
+        `;
+
+      button.textContent =
+        method.name;
+
+
+      /* -----------------------------------------------------
+         SELECT PAYMENT METHOD
+      ----------------------------------------------------- */
+
+      button.onclick = () => {
+
+        selectedDepositPaymentMethod =
+          method;
+
+
+        container
+          .querySelectorAll(
+            ".payment-method-btn"
+          )
+          .forEach(btn => {
+
+            btn.classList.remove(
+              "active"
+            );
+
+            btn.style.borderColor =
+              "#ccc";
+
+            btn.style.background =
+              "#fff";
+
+          });
+
+
+        button.classList.add(
+          "active"
+        );
+
+        button.style.borderColor =
+          "#1976d2";
+
+        button.style.background =
+          "#e3f2fd";
+
+      };
+
+
+      container.appendChild(
+        button
+      );
+
     }
   );
 }
 
-function renderPaymentMethods() {
-  const container = $("depositPaymentMethods");
-  if (!container) return;
 
-  if (!userPaymentMethods.length) {
-    container.innerHTML = `<p style="text-align:center;color:#777;">No payment methods available.</p>`;
-    return;
-  }
+/* =========================================================
+   GO TO PAYMENT METHOD STEP
+========================================================= */
 
-  container.innerHTML = "";
+window.goToPaymentMethod =
+  function () {
 
-  userPaymentMethods.forEach(method => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "payment-method-btn";
-    button.style.cssText = "width:100%;padding:10px;margin-bottom:8px;border:1px solid #ccc;border-radius:6px;background:#fff;";
-    button.textContent = method.name;
+    const amount =
+      Number(
+        $("rechargeAmount")?.value || 0
+      );
 
-    button.onclick = () => {
-      selectedDepositPaymentMethod = method;
-      container.querySelectorAll(".payment-method-btn").forEach(btn => btn.classList.remove("active"));
-      button.classList.add("active");
-    };
 
-    container.appendChild(button);
-  });
-}
+    /* -------------------------------------------------------
+       Amount entered
+    ------------------------------------------------------- */
 
-window.goToPaymentMethod = function () {
-  const amount = Number($("rechargeAmount")?.value || 0);
+    if (
+      Number.isFinite(amount)
+      &&
+      amount > 0
+    ) {
 
-  if (amount > 0) {
-    selectedRechargeAmount = amount;
-    if (selectedRechargeLevel && selectedRechargeLevel.isUpgrade) {
-      selectedRechargeAmount = amount;
-    } else {
-      selectedRechargeLevel = rechargeLevels.find(level => Number(level.amount) === Number(amount)) || null;
-      if (!selectedRechargeLevel) {
-        return alert("Please select a valid recharge level.");
+      selectedRechargeAmount =
+        amount;
+
+
+      /* -----------------------------------------------------
+         Upgrade
+      ----------------------------------------------------- */
+
+      if (
+        selectedRechargeLevel
+        &&
+        selectedRechargeLevel.isUpgrade
+          === true
+      ) {
+
+        selectedRechargeAmount =
+          amount;
+
       }
+
+      /* -----------------------------------------------------
+         Normal recharge
+      ----------------------------------------------------- */
+
+      else {
+
+        selectedRechargeLevel =
+          rechargeLevels.find(
+            level =>
+              Number(level.amount)
+              ===
+              Number(amount)
+          )
+          ||
+          null;
+
+
+        if (!selectedRechargeLevel) {
+
+          return alert(
+            "Please select a valid recharge level."
+          );
+
+        }
+
+      }
+
     }
-  }
 
-  if (selectedRechargeAmount <= 0) {
-    return alert("Please select or enter a valid amount.");
-  }
 
-  setText("transferAmount", `ETB ${money(selectedRechargeAmount)}`);
-  hideElement("rechargeStep1");
-  showElement("rechargeStep2");
-  loadUserPaymentMethods();
-};
+    /* -------------------------------------------------------
+       Validate amount
+    ------------------------------------------------------- */
 
-window.goToPaymentDetails = function () {
-  if (!selectedDepositPaymentMethod) {
-    return alert("Please select a payment method.");
-  }
+    if (
+      !Number.isFinite(
+        Number(selectedRechargeAmount)
+      )
+      ||
+      Number(selectedRechargeAmount) <= 0
+    ) {
 
-  setText("finalPaymentMethod", selectedDepositPaymentMethod.name);
-  setText("finalAccountName", selectedDepositPaymentMethod.accountName || "—");
-  setText("finalAccountNumber", selectedDepositPaymentMethod.accountNumber || "—");
-  setText("finalTransferAmount", `ETB ${money(selectedRechargeAmount)}`);
+      return alert(
+        "Please select or enter a valid amount."
+      );
 
-  hideElement("rechargeStep2");
-  showElement("rechargeStep3");
-};
+    }
 
-window.backToAmountStep = function () {
-  hideElement("rechargeStep2");
-  showElement("rechargeStep1");
-};
 
-window.backToPaymentMethod = function () {
-  hideElement("rechargeStep3");
-  showElement("rechargeStep2");
-};
+    /* -------------------------------------------------------
+       Display amount
+    ------------------------------------------------------- */
+
+    setText(
+      "transferAmount",
+      `ETB ${money(selectedRechargeAmount)}`
+    );
+
+
+    /* -------------------------------------------------------
+       Reset selected payment method
+    ------------------------------------------------------- */
+
+    selectedDepositPaymentMethod =
+      null;
+
+
+    /* -------------------------------------------------------
+       Steps
+    ------------------------------------------------------- */
+
+    hideElement(
+      "rechargeStep1"
+    );
+
+    showElement(
+      "rechargeStep2"
+    );
+
+
+    /* -------------------------------------------------------
+       Load methods
+    ------------------------------------------------------- */
+
+    loadUserPaymentMethods();
+
+  };
+
+
+/* =========================================================
+   GO TO PAYMENT DETAILS
+========================================================= */
+
+window.goToPaymentDetails =
+  function () {
+
+    if (
+      !selectedDepositPaymentMethod
+    ) {
+
+      return alert(
+        "Please select a payment method."
+      );
+
+    }
+
+
+    const method =
+      selectedDepositPaymentMethod;
+
+
+    setText(
+      "finalPaymentMethod",
+      method.name || "Payment"
+    );
+
+
+    setText(
+      "finalAccountName",
+      method.accountName || "—"
+    );
+
+
+    setText(
+      "finalAccountNumber",
+      method.accountNumber || "—"
+    );
+
+
+    setText(
+      "finalTransferAmount",
+      `ETB ${money(selectedRechargeAmount)}`
+    );
+
+
+    hideElement(
+      "rechargeStep2"
+    );
+
+    showElement(
+      "rechargeStep3"
+    );
+
+  };
+
+
+/* =========================================================
+   BACK TO AMOUNT
+========================================================= */
+
+window.backToAmountStep =
+  function () {
+
+    hideElement(
+      "rechargeStep2"
+    );
+
+    showElement(
+      "rechargeStep1"
+    );
+
+  };
+
+
+/* =========================================================
+   BACK TO PAYMENT METHOD
+========================================================= */
+
+window.backToPaymentMethod =
+  function () {
+
+    hideElement(
+      "rechargeStep3"
+    );
+
+    showElement(
+      "rechargeStep2"
+    );
+
+  };
+
 
 /* =========================================================
    SUBMIT RECHARGE
 ========================================================= */
 
-window.submitRecharge = async function () {
-  if (!currentUser || window._ccusRechargeSubmitting) return;
+window.submitRecharge =
+  async function () {
 
-  const transactionId = $("transactionId")?.value?.trim();
-  if (!transactionId) {
-    return alert("Please enter Transaction ID.");
-  }
+    if (
+      !currentUser
+      ||
+      window._ccusRechargeSubmitting
+    ) {
 
-  if (selectedRechargeAmount <= 0 || !selectedDepositPaymentMethod) {
-    return alert("Invalid amount or payment method.");
-  }
-
-  window._ccusRechargeSubmitting = true;
-
-  try {
-    let amount = Number(selectedRechargeAmount);
-    const isUpgrade = selectedRechargeLevel?.isUpgrade === true;
-    let level = null;
-
-    if (!isUpgrade) {
-      level = rechargeLevels.find(item => Number(item.amount) === amount);
-      if (!level) throw new Error("Selected recharge level was not found.");
+      return;
     }
 
-    if (isUpgrade) {
-      const approvedTotal = await getUserApprovedRechargeTotal(currentUser.uid);
-      const freshInfo = getUpgradeDepositInfo(approvedTotal, rechargeLevels);
 
-      if (freshInfo.isMaximum || !freshInfo.nextLevel) {
-        throw new Error("You are already at the maximum level.");
+    /* -------------------------------------------------------
+       Transaction ID
+    ------------------------------------------------------- */
+
+    const transactionId =
+      $("transactionId")
+        ?.value
+        ?.trim();
+
+
+    if (!transactionId) {
+
+      return alert(
+        "Please enter Transaction ID."
+      );
+
+    }
+
+
+    /* -------------------------------------------------------
+       Validate payment method
+    ------------------------------------------------------- */
+
+    if (
+      !selectedDepositPaymentMethod
+    ) {
+
+      return alert(
+        "Please select a payment method."
+      );
+
+    }
+
+
+    /* -------------------------------------------------------
+       Validate amount
+    ------------------------------------------------------- */
+
+    if (
+      !Number.isFinite(
+        Number(selectedRechargeAmount)
+      )
+      ||
+      Number(selectedRechargeAmount) <= 0
+    ) {
+
+      return alert(
+        "Invalid recharge amount."
+      );
+
+    }
+
+
+    window._ccusRechargeSubmitting =
+      true;
+
+
+    try {
+
+      let amount =
+        Number(
+          selectedRechargeAmount
+        );
+
+
+      const isUpgrade =
+        selectedRechargeLevel?.isUpgrade
+        === true;
+
+
+      let level = null;
+
+
+      /* =====================================================
+         NORMAL RECHARGE
+      ===================================================== */
+
+      if (!isUpgrade) {
+
+        level =
+          rechargeLevels.find(
+            item =>
+              Number(item.amount)
+              ===
+              Number(amount)
+          )
+          ||
+          null;
+
+
+        if (!level) {
+
+          throw new Error(
+            "Selected recharge level was not found."
+          );
+
+        }
+
       }
 
-      level = freshInfo.nextLevel;
-      const expectedUpgradeAmount = Number(level.amount) - Number(freshInfo.currentLevel?.amount || 0);
-      const finalUpgradeAmount = freshInfo.currentLevel ? expectedUpgradeAmount : Number(level.amount);
 
-      amount = Number($("rechargeAmount")?.value || selectedRechargeAmount || 0);
+      /* =====================================================
+         UPGRADE RECHARGE
+      ===================================================== */
 
-      if (!Number.isFinite(amount) || amount <= 0) {
-        throw new Error("Invalid upgrade amount.");
+      if (isUpgrade) {
+
+        const approvedTotal =
+          await getUserApprovedRechargeTotal(
+            currentUser.uid
+          );
+
+
+        const freshInfo =
+          getUpgradeDepositInfo(
+            approvedTotal,
+            rechargeLevels
+          );
+
+
+        if (
+          freshInfo.isMaximum
+          ||
+          !freshInfo.nextLevel
+        ) {
+
+          throw new Error(
+            "You are already at the maximum level."
+          );
+
+        }
+
+
+        level =
+          freshInfo.nextLevel;
+
+
+        const expectedUpgradeAmount =
+          Number(level.amount)
+          -
+          Number(
+            freshInfo.currentLevel?.amount
+            || 0
+          );
+
+
+        const finalUpgradeAmount =
+          freshInfo.currentLevel
+            ? expectedUpgradeAmount
+            : Number(level.amount);
+
+
+        amount =
+          Number(
+            $("rechargeAmount")?.value
+            ||
+            selectedRechargeAmount
+            ||
+            0
+          );
+
+
+        if (
+          !Number.isFinite(amount)
+          ||
+          amount <= 0
+        ) {
+
+          throw new Error(
+            "Invalid upgrade amount."
+          );
+
+        }
+
+
+        if (
+          Math.abs(
+            amount -
+            finalUpgradeAmount
+          ) > 0.001
+        ) {
+
+          throw new Error(
+            `Upgrade amount must be ETB ${money(finalUpgradeAmount)}`
+          );
+
+        }
+
+
+        selectedRechargeAmount =
+          finalUpgradeAmount;
+
+
+        selectedRechargeLevel = {
+
+          ...level,
+
+          isUpgrade: true,
+
+          upgradeAmount:
+            finalUpgradeAmount,
+
+          targetLevelId:
+            level.id,
+
+          targetLevel:
+            level.level,
+
+          targetLevelAmount:
+            Number(level.amount),
+
+          currentLevelId:
+            freshInfo.currentLevel?.id
+            || "",
+
+          currentLevel:
+            freshInfo.currentLevel?.level
+            || "No Level",
+
+          currentApprovedTotal:
+            approvedTotal
+
+        };
+
       }
 
-      if (Math.abs(amount - finalUpgradeAmount) > 0.001) {
-        throw new Error(`Upgrade amount must be ETB ${money(finalUpgradeAmount)}`);
-      }
 
-      selectedRechargeAmount = finalUpgradeAmount;
-      selectedRechargeLevel = {
-        ...level,
-        isUpgrade: true,
-        upgradeAmount: finalUpgradeAmount,
-        targetLevelId: level.id,
-        targetLevel: level.level,
-        targetLevelAmount: Number(level.amount),
-        currentLevelId: freshInfo.currentLevel?.id || "",
-        currentLevel: freshInfo.currentLevel?.level || "No Level",
-        currentApprovedTotal: approvedTotal
+      /* =====================================================
+         PAYMENT METHOD
+      ===================================================== */
+
+      const paymentMethod =
+        selectedDepositPaymentMethod;
+
+
+      /* =====================================================
+         RECHARGE REQUEST DATA
+      ===================================================== */
+
+      const requestData = {
+
+        userId:
+          currentUser.uid,
+
+        userEmail:
+          currentUser.email || "",
+
+        userName:
+          currentUserData?.fullName
+          ||
+          currentUser.displayName
+          ||
+          "",
+
+        amount:
+          amount,
+
+        depositAmount:
+          amount,
+
+        rechargeLevelId:
+          level?.id || "",
+
+        depositLevel:
+          level?.level
+          ||
+          "General Deposit",
+
+        levelName:
+          level?.level
+          ||
+          "General Deposit",
+
+        commissionAmount:
+          Number(
+            level?.commission || 0
+          ),
+
+        paymentMethod:
+          paymentMethod.name || "Payment",
+
+        paymentMethodId:
+          paymentMethod.id || "",
+
+        accountName:
+          paymentMethod.accountName
+          ||
+          "",
+
+        accountNumber:
+          paymentMethod.accountNumber
+          ||
+          "",
+
+        transactionId:
+          transactionId,
+
+        status:
+          "pending",
+
+        createdAt:
+          serverTimestamp()
+
       };
+
+
+      /* =====================================================
+         UPGRADE INFORMATION
+      ===================================================== */
+
+      if (isUpgrade) {
+
+        requestData.isUpgrade =
+          true;
+
+        requestData.upgradeFromLevel =
+          selectedRechargeLevel.currentLevel
+          ||
+          "No Level";
+
+        requestData.upgradeFromAmount =
+          Number(
+            selectedRechargeLevel.currentApprovedTotal
+            || 0
+          );
+
+        requestData.targetLevelId =
+          level.id;
+
+        requestData.targetLevel =
+          level.level;
+
+        requestData.targetLevelAmount =
+          Number(level.amount);
+
+        requestData.upgradeAmount =
+          Number(amount);
+
+      } else {
+
+        requestData.isUpgrade =
+          false;
+
+      }
+
+
+      /* =====================================================
+         CREATE RECHARGE REQUEST
+
+         USER CAN CREATE PENDING REQUEST.
+         ADMIN APPROVES/REJECTS LATER.
+      ===================================================== */
+
+      await addDoc(
+        collection(
+          db,
+          "rechargeRequests"
+        ),
+        requestData
+      );
+
+
+      /* =====================================================
+         SUCCESS UI
+      ===================================================== */
+
+      hideElement(
+        "rechargeStep3"
+      );
+
+      showElement(
+        "rechargePending"
+      );
+
+
+      if ($("transactionId")) {
+
+        $("transactionId").value =
+          "";
+
+      }
+
+
+      /* -----------------------------------------------------
+         Reset selection
+      ----------------------------------------------------- */
+
+      selectedDepositPaymentMethod =
+        null;
+
+
+    } catch (error) {
+
+      console.error(
+        "Submit recharge error:",
+        error
+      );
+
+      alert(
+        error?.message
+        ||
+        firebaseErrorMessage(error)
+        ||
+        "Unable to submit recharge request."
+      );
+
+    } finally {
+
+      window._ccusRechargeSubmitting =
+        false;
+
     }
 
-    const requestData = {
-      userId: currentUser.uid,
-      userEmail: currentUser.email || "",
-      userName: currentUserData?.fullName || currentUser.displayName || "",
-      amount,
-      depositAmount: amount,
-      rechargeLevelId: level?.id || "",
-      depositLevel: level?.level || "General Deposit",
-      levelName: level?.level || "General Deposit",
-      commissionAmount: Number(level?.commission || 0),
-      paymentMethod: selectedDepositPaymentMethod.name,
-      paymentMethodId: selectedDepositPaymentMethod.id || "",
-      accountName: selectedDepositPaymentMethod.accountName || "",
-      accountNumber: selectedDepositPaymentMethod.accountNumber || "",
-      transactionId,
-      status: "pending",
-      createdAt: serverTimestamp()
-    };
-
-    if (isUpgrade) {
-      requestData.isUpgrade = true;
-      requestData.upgradeFromLevel = selectedRechargeLevel.currentLevel || "No Level";
-      requestData.upgradeFromAmount = Number(selectedRechargeLevel.currentApprovedTotal || 0);
-      requestData.targetLevelId = level.id;
-      requestData.targetLevel = level.level;
-      requestData.targetLevelAmount = Number(level.amount);
-      requestData.upgradeAmount = Number(amount);
-    } else {
-      requestData.isUpgrade = false;
-    }
-
-    await addDoc(collection(db, "rechargeRequests"), requestData);
-
-    hideElement("rechargeStep3");
-    showElement("rechargePending");
-
-    if ($("transactionId")) {
-      $("transactionId").value = "";
-    }
-  } catch (error) {
-    console.error("Submit recharge error:", error);
-    alert(error?.message || firebaseErrorMessage(error));
-  } finally {
-    window._ccusRechargeSubmitting = false;
-  }
-};
-
+  };
 /* =========================================================
    RECHARGE HISTORY
 ========================================================= */
@@ -3713,55 +4405,29 @@ window.renderCompanySalaryStructure =
 
 
 /* =========================================================
-   OPTIONAL INITIAL LOAD
-   Call these from your existing page/router when needed.
-========================================================= */
+   CCUS - DAILY TASKS SYSTEM
+   FINAL STABLE / CORRECTED VERSION
 
-// window.loadVIPLevels();
-// window.loadIncomeLevels();
-/* =========================================================
-CCUS - DAILY TASKS SYSTEM
-FINAL STABLE VERSION
-=========================================================
-
-BUSINESS RULES
----------------------------------------------------------
-1. Approved recharge determines task level.
-
-2. Highest eligible approved recharge level is used.
-
-3. Upgrade recharge is counted by its upgrade amount.
-
-4. Task levels are controlled from:
-   rechargeLevels
-
-5. Sunday = blocked.
-
-6. Task hours:
-   09:00 AM - 09:00 PM Ethiopia time.
-
-7. One task can be claimed once per day.
-
-8. Daily task limit comes from the highest
-   eligible recharge level.
-
-9. Task reward increases totalBalance.
-
-10. totalRecharge is NEVER changed by task claim.
-
-11. vipLevel is NEVER required for task claim.
-
-12. users/{uid}.taskLimit is NOT required.
-
-13. Firestore task reward is authoritative.
-
-14. Claim ID:
-   YYYY-MM-DD_taskId
-
-15. Atomic Firestore transaction.
-
-16. All transaction reads happen before writes.
-
+   BUSINESS RULES
+   ---------------------------------------------------------
+   1. Approved recharge determines task level.
+   2. Highest eligible approved recharge level is used.
+   3. Upgrade recharge uses upgradeAmount.
+   4. Task levels come from rechargeLevels.
+   5. Sunday = blocked.
+   6. Task hours = 09:00 - 21:00 Ethiopia time.
+   7. One task can be claimed once per day.
+   8. Daily task limit comes from recharge level.
+   9. Task reward increases totalBalance.
+   10. totalRecharge is NOT changed by task claim.
+   11. vipLevel is NOT required.
+   12. users/{uid}.taskLimit is NOT required.
+   13. tasks/{taskId}.reward is authoritative.
+   14. Claim ID = YYYY-MM-DD_taskId.
+   15. Firestore transaction is used.
+   16. Transaction reads are DocumentReferences only.
+   17. Daily limit is checked atomically using:
+       users/{uid}/taskDailyStats/{YYYY-MM-DD}
 ========================================================= */
 
 
@@ -3872,6 +4538,17 @@ async function loadTaskSettings() {
         ? snap.data() || {}
         : {};
 
+    /*
+     * rewardPerTask is kept only for
+     * admin compatibility.
+     *
+     * IMPORTANT:
+     * It is NOT used as task reward.
+     *
+     * Authoritative reward:
+     * tasks/{taskId}.reward
+     */
+
     const reward =
       Number(
         data.rewardPerTask ?? 0
@@ -3900,7 +4577,9 @@ async function loadTaskSettings() {
     );
 
     window.taskSettings = {
+
       active: true,
+
       rewardPerTask: 0
     };
 
@@ -3936,9 +4615,9 @@ async function ensureTaskRechargeLevels() {
         let level = null;
 
 
-        /* -----------------------------------------------
-           USE EXISTING NORMALIZER IF AVAILABLE
-           ----------------------------------------------- */
+        /* -------------------------------------------------
+           NORMALIZER
+        ------------------------------------------------- */
 
         if (
           typeof normalizeRechargeLevel ===
@@ -3963,9 +4642,9 @@ async function ensureTaskRechargeLevels() {
         }
 
 
-        /* -----------------------------------------------
+        /* -------------------------------------------------
            FALLBACK NORMALIZER
-           ----------------------------------------------- */
+        ------------------------------------------------- */
 
         if (!level) {
 
@@ -4025,6 +4704,7 @@ async function ensureTaskRechargeLevels() {
           !Number.isFinite(amount) ||
           amount <= 0
         ) {
+
           return;
         }
 
@@ -4034,6 +4714,7 @@ async function ensureTaskRechargeLevels() {
             level.active
           )
         ) {
+
           return;
         }
 
@@ -4080,6 +4761,10 @@ async function ensureTaskRechargeLevels() {
     );
 
 
+    /* -----------------------------------------------------
+       SORT BY AMOUNT
+    ----------------------------------------------------- */
+
     levels.sort(
       (a, b) => {
 
@@ -4090,6 +4775,7 @@ async function ensureTaskRechargeLevels() {
         if (
           amountDiff !== 0
         ) {
+
           return amountDiff;
         }
 
@@ -4112,7 +4798,9 @@ async function ensureTaskRechargeLevels() {
           levels;
       }
 
-    } catch (error) {}
+    } catch (error) {
+      /* ignore */
+    }
 
 
     window.rechargeLevels =
@@ -4145,6 +4833,7 @@ async function getApprovedRechargeRecords(
 ) {
 
   if (!userId) {
+
     return [];
   }
 
@@ -4169,6 +4858,7 @@ async function getApprovedRechargeRecords(
 
 
     return snap.docs
+
       .map(
         item => ({
 
@@ -4178,6 +4868,7 @@ async function getApprovedRechargeRecords(
           ...item.data()
         })
       )
+
       .filter(
         item =>
           String(
@@ -4201,7 +4892,7 @@ async function getApprovedRechargeRecords(
 
 
 /* =========================================================
-RECHARGE CONTRIBUTION
+GET APPROVED RECHARGE CONTRIBUTION
 ========================================================= */
 
 function getApprovedRechargeContribution(
@@ -4209,13 +4900,14 @@ function getApprovedRechargeContribution(
 ) {
 
   if (!record) {
+
     return 0;
   }
 
 
   /* -------------------------------------------------------
      UPGRADE
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
 
   const isUpgrade =
     record.isUpgrade === true ||
@@ -4234,6 +4926,7 @@ function getApprovedRechargeContribution(
         record.upgradeAmount ?? 0
       );
 
+
     if (
       Number.isFinite(upgradeAmount) &&
       upgradeAmount > 0
@@ -4246,7 +4939,7 @@ function getApprovedRechargeContribution(
 
   /* -------------------------------------------------------
      LEGACY UPGRADE
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
 
   const legacyUpgradeAmount =
     Number(
@@ -4279,7 +4972,7 @@ function getApprovedRechargeContribution(
 
   /* -------------------------------------------------------
      NORMAL RECHARGE
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
 
   const amount =
     Number(
@@ -4309,15 +5002,17 @@ async function getApprovedRechargeTotal(
 ) {
 
   if (!userId) {
+
     return 0;
   }
 
 
-  /* -------------------------------------------------------
-     FIRST: USERS TOTAL RECHARGE
-     ------------------------------------------------------- */
-
   let userTotal = 0;
+
+
+  /* -------------------------------------------------------
+     USERS TOTAL RECHARGE
+  ------------------------------------------------------- */
 
   try {
 
@@ -4364,11 +5059,8 @@ async function getApprovedRechargeTotal(
 
 
   /* -------------------------------------------------------
-     USE APPROVED REQUESTS TOO
-     
-     If approved requests contain a larger
-     approved total, use that value.
-     ------------------------------------------------------- */
+     APPROVED REQUEST FALLBACK
+  ------------------------------------------------------- */
 
   try {
 
@@ -4400,12 +5092,6 @@ async function getApprovedRechargeTotal(
         );
 
 
-      /*
-       * Normally users.totalRecharge is authoritative.
-       * But if it is zero while approved requests exist,
-       * use approved request total.
-       */
-
       if (
         userTotal <= 0 &&
         requestTotal > 0
@@ -4429,7 +5115,7 @@ async function getApprovedRechargeTotal(
 
 
 /* =========================================================
-GET HIGHEST ELIGIBLE LEVEL
+GET HIGHEST ELIGIBLE RECHARGE LEVEL
 ========================================================= */
 
 async function getApprovedRechargeLevel(
@@ -4437,6 +5123,7 @@ async function getApprovedRechargeLevel(
 ) {
 
   if (!userId) {
+
     return null;
   }
 
@@ -4487,6 +5174,7 @@ async function getApprovedRechargeLevel(
       !Number.isFinite(amount) ||
       amount <= 0
     ) {
+
       continue;
     }
 
@@ -4497,7 +5185,6 @@ async function getApprovedRechargeLevel(
 
       if (
         !currentLevel ||
-
         amount >
         Number(
           currentLevel.amount ?? 0
@@ -4512,6 +5199,7 @@ async function getApprovedRechargeLevel(
 
 
   if (!currentLevel) {
+
     return null;
   }
 
@@ -4536,6 +5224,7 @@ async function getUserDailyTaskLimit(
 ) {
 
   if (!userId) {
+
     return 0;
   }
 
@@ -4547,6 +5236,7 @@ async function getUserDailyTaskLimit(
 
 
   if (!level) {
+
     return 0;
   }
 
@@ -4558,16 +5248,18 @@ async function getUserDailyTaskLimit(
 
 
   return Number.isFinite(limit)
+
     ? Math.max(
         0,
         Math.floor(limit)
       )
+
     : 0;
 }
 
 
 /* =========================================================
-TODAY CLAIMS
+GET TODAY CLAIMS
 ========================================================= */
 
 async function getTodayTaskClaims(
@@ -4577,8 +5269,12 @@ async function getTodayTaskClaims(
   if (!userId) {
 
     return {
-      ids: new Set(),
-      count: 0
+
+      ids:
+        new Set(),
+
+      count:
+        0
     };
   }
 
@@ -4598,47 +5294,112 @@ async function getTodayTaskClaims(
       );
 
 
-    const snap =
-      await getDocs(
-        query(
-          claimsRef,
-
-          where(
-            "date",
-            "==",
-            today
-          )
-        )
-      );
-
-
     const ids =
       new Set();
 
 
-    snap.forEach(
-      claimSnap => {
+    /* -----------------------------------------------------
+       NEW FORMAT
+    ----------------------------------------------------- */
 
-        const data =
-          claimSnap.data() || {};
+    try {
 
+      const dateSnap =
+        await getDocs(
+          query(
+            claimsRef,
 
-        if (
-          data.taskId !==
-          undefined &&
-
-          data.taskId !==
-          null
-        ) {
-
-          ids.add(
-            String(
-              data.taskId
+            where(
+              "date",
+              "==",
+              today
             )
-          );
+          )
+        );
+
+
+      dateSnap.forEach(
+        claimSnap => {
+
+          const data =
+            claimSnap.data() || {};
+
+
+          if (
+            data.taskId !==
+            undefined &&
+            data.taskId !==
+            null
+          ) {
+
+            ids.add(
+              String(
+                data.taskId
+              )
+            );
+          }
         }
-      }
-    );
+      );
+
+    } catch (error) {
+
+      console.warn(
+        "⚠️ date claim query warning:",
+        error
+      );
+    }
+
+
+    /* -----------------------------------------------------
+       LEGACY FORMAT
+    ----------------------------------------------------- */
+
+    try {
+
+      const claimDateSnap =
+        await getDocs(
+          query(
+            claimsRef,
+
+            where(
+              "claimDate",
+              "==",
+              today
+            )
+          )
+        );
+
+
+      claimDateSnap.forEach(
+        claimSnap => {
+
+          const data =
+            claimSnap.data() || {};
+
+
+          if (
+            data.taskId !==
+            undefined &&
+            data.taskId !==
+            null
+          ) {
+
+            ids.add(
+              String(
+                data.taskId
+              )
+            );
+          }
+        }
+      );
+
+    } catch (error) {
+
+      console.warn(
+        "⚠️ claimDate query warning:",
+        error
+      );
+    }
 
 
     return {
@@ -4646,7 +5407,7 @@ async function getTodayTaskClaims(
       ids,
 
       count:
-        snap.size
+        ids.size
     };
 
   } catch (error) {
@@ -4681,7 +5442,7 @@ async function getSafeTaskOperatingStatus() {
 
   /* -------------------------------------------------------
      SUNDAY
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
 
   if (
     Number(parts.weekday) === 0
@@ -4705,7 +5466,7 @@ async function getSafeTaskOperatingStatus() {
   /* -------------------------------------------------------
      HOURS
      09:00 - 21:00
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
 
   const hour =
     Number(
@@ -4746,7 +5507,7 @@ async function getSafeTaskOperatingStatus() {
 
   /* -------------------------------------------------------
      ADMIN CALENDAR
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
 
   try {
 
@@ -4759,9 +5520,7 @@ async function getSafeTaskOperatingStatus() {
         await getTodayOperatingStatus();
 
 
-      if (
-        calendar
-      ) {
+      if (calendar) {
 
         return {
 
@@ -4769,7 +5528,8 @@ async function getSafeTaskOperatingStatus() {
 
           isSunday:
             calendar.reason ===
-            "sunday"
+            "sunday" ||
+            calendar.isSunday === true
         };
       }
     }
@@ -4789,13 +5549,14 @@ async function getSafeTaskOperatingStatus() {
 
     isSunday: false,
 
-    reason: "open"
+    reason:
+      "open"
   };
 }
 
 
 /* =========================================================
-GET ACTIVE TASKS
+GET ACTIVE DAILY TASKS
 ========================================================= */
 
 async function getActiveDailyTasks() {
@@ -4821,6 +5582,10 @@ async function getActiveDailyTasks() {
           taskSnap.data() || {};
 
 
+        /* -------------------------------------------------
+           ACTIVE
+        ------------------------------------------------- */
+
         if (
           !isTaskActiveValue(
             data.active
@@ -4830,6 +5595,63 @@ async function getActiveDailyTasks() {
           return;
         }
 
+
+        /* -------------------------------------------------
+           REAL FIRESTORE DOCUMENT ID
+        ------------------------------------------------- */
+
+        const firestoreTaskId =
+          String(
+            taskSnap.id
+          );
+
+
+        /* -------------------------------------------------
+           AUTHORITATIVE REWARD
+        ------------------------------------------------- */
+
+        const rawReward =
+          data.reward;
+
+
+        const reward =
+          Number(
+            rawReward
+          );
+
+
+        if (
+          rawReward === null ||
+          rawReward === undefined ||
+          rawReward === "" ||
+          !Number.isFinite(reward) ||
+          reward <= 0
+        ) {
+
+          console.warn(
+            "⚠️ TASK SKIPPED - INVALID REWARD:",
+            {
+
+              taskId:
+                firestoreTaskId,
+
+              title:
+                data.title ??
+                data.name ??
+                "Daily Task",
+
+              reward:
+                rawReward
+            }
+          );
+
+          return;
+        }
+
+
+        /* -------------------------------------------------
+           ORDER
+        ------------------------------------------------- */
 
         const rawOrder =
           Number(
@@ -4843,28 +5665,13 @@ async function getActiveDailyTasks() {
             : 999999;
 
 
-        /*
-         * Firestore task reward is authoritative.
-         */
-
-        const rawReward =
-          data.reward ??
-          data.rewardAmount ??
-          window.taskSettings
-            ?.rewardPerTask ??
-          0;
-
-
-        const reward =
-          Number(
-            rawReward
-          );
-
-
         tasks.push({
 
           id:
-            taskSnap.id,
+            firestoreTaskId,
+
+          taskId:
+            firestoreTaskId,
 
           title:
             String(
@@ -4882,26 +5689,25 @@ async function getActiveDailyTasks() {
 
           order,
 
-          reward:
-            Number.isFinite(reward)
-              ? Math.max(
-                  0,
-                  reward
-                )
-              : 0,
+          reward,
 
-          active: true
+          active:
+            true
         });
       }
     );
 
 
+    /* -----------------------------------------------------
+       SORT
+    ----------------------------------------------------- */
+
     tasks.sort(
       (a, b) => {
 
         const orderDiff =
-          a.order -
-          b.order;
+          Number(a.order) -
+          Number(b.order);
 
 
         if (
@@ -4912,10 +5718,13 @@ async function getActiveDailyTasks() {
         }
 
 
-        return String(a.id)
-          .localeCompare(
-            String(b.id)
-          );
+        return String(
+          a.taskId
+        ).localeCompare(
+          String(
+            b.taskId
+          )
+        );
       }
     );
 
@@ -5029,9 +5838,7 @@ async function loadDailyTasks(
 
   if (
     !options.force &&
-
     window.dailyTasksLoaded &&
-
     Array.isArray(
       window.dailyTasksCache
     )
@@ -5096,7 +5903,8 @@ async function loadDailyTasks(
 
           allowed: false,
 
-          reason: "disabled",
+          reason:
+            "disabled",
 
           message:
             "Tasks are currently unavailable."
@@ -5117,6 +5925,10 @@ async function loadDailyTasks(
     }
 
 
+    /* -----------------------------------------------------
+       OPERATING STATUS
+    ----------------------------------------------------- */
+
     const status =
       await getSafeTaskOperatingStatus();
 
@@ -5126,6 +5938,10 @@ async function loadDailyTasks(
       "sunday" ||
       status.isSunday === true;
 
+
+    /* -----------------------------------------------------
+       ACTIVE TASKS
+    ----------------------------------------------------- */
 
     const tasks =
       await getActiveDailyTasks();
@@ -5173,6 +5989,10 @@ async function loadDailyTasks(
     }
 
 
+    /* -----------------------------------------------------
+       LEVEL
+    ----------------------------------------------------- */
+
     const level =
       await getApprovedRechargeLevel(
         currentUser.uid
@@ -5186,25 +6006,47 @@ async function loadDailyTasks(
       );
 
 
+    /* -----------------------------------------------------
+       CLAIMS
+    ----------------------------------------------------- */
+
     const claimed =
       await getTodayTaskClaims(
         currentUser.uid
       );
 
 
+    /* -----------------------------------------------------
+       NO APPROVED LEVEL
+    ----------------------------------------------------- */
+
     if (!level) {
 
       const mapped =
         tasks.map(
-          task => ({
+          task => {
 
-            ...task,
+            const taskId =
+              String(
+                task.taskId ??
+                task.id
+              );
 
-            submitted:
-              claimed.ids.has(
-                String(task.id)
-              )
-          })
+            return {
+
+              ...task,
+
+              id:
+                taskId,
+
+              taskId,
+
+              submitted:
+                claimed.ids.has(
+                  taskId
+                )
+            };
+          }
         );
 
 
@@ -5247,6 +6089,10 @@ async function loadDailyTasks(
     }
 
 
+    /* -----------------------------------------------------
+       DAILY LIMIT
+    ----------------------------------------------------- */
+
     const dailyLimit =
       Math.max(
         0,
@@ -5258,17 +6104,41 @@ async function loadDailyTasks(
       );
 
 
+    /* -----------------------------------------------------
+       MAP
+    ----------------------------------------------------- */
+
     const mapped =
       tasks.map(
-        task => ({
+        task => {
 
-          ...task,
+          const taskId =
+            String(
+              task.taskId ??
+              task.id
+            );
 
-          submitted:
-            claimed.ids.has(
-              String(task.id)
-            )
-        })
+
+          return {
+
+            ...task,
+
+            id:
+              taskId,
+
+            taskId,
+
+            reward:
+              Number(
+                task.reward
+              ),
+
+            submitted:
+              claimed.ids.has(
+                taskId
+              )
+          };
+        }
       );
 
 
@@ -5371,6 +6241,7 @@ function getDisabledBtn(
 ) {
 
   return `
+
     <button
       type="button"
       disabled
@@ -5386,6 +6257,7 @@ function getDisabledBtn(
     >
       ${escapeHtml(text)}
     </button>
+
   `;
 }
 
@@ -5477,6 +6349,13 @@ function renderDailyTasks(
         index
       ) => {
 
+        const taskId =
+          String(
+            task.taskId ??
+            task.id
+          );
+
+
         const taskNumber =
           Number(
             task.taskNumber ??
@@ -5484,7 +6363,8 @@ function renderDailyTasks(
           );
 
 
-        let buttonHTML = "";
+        let buttonHTML =
+          "";
 
 
         if (
@@ -5504,7 +6384,8 @@ function renderDailyTasks(
             <button
               type="button"
               class="primary-btn task-claim-btn"
-              data-id="${escapeHtml(task.id)}"
+              data-id="${escapeHtml(taskId)}"
+              data-task-id="${escapeHtml(taskId)}"
               style="
                 margin-top:8px;
                 width:100%;
@@ -5521,7 +6402,7 @@ function renderDailyTasks(
 
           <div
             class="simple-card task-card"
-            data-task-id="${escapeHtml(task.id)}"
+            data-task-id="${escapeHtml(taskId)}"
             style="
               margin-bottom:12px;
               padding:14px;
@@ -5531,7 +6412,7 @@ function renderDailyTasks(
           >
 
             <h3>
-              Task ${taskNumber}
+              Task ${taskNumber}:
               ${escapeHtml(task.title)}
             </h3>
 
@@ -5593,15 +6474,38 @@ function renderDailyTasks(
                 }
 
 
+                const selectedTaskId =
+                  String(
+                    button.dataset.taskId ||
+                    button.dataset.id ||
+                    ""
+                  );
+
+
                 const selectedTask =
                   tasks.find(
-                    item =>
-                      String(item.id) ===
-                      String(button.dataset.id)
+                    item => {
+
+                      const itemTaskId =
+                        String(
+                          item.taskId ??
+                          item.id
+                        );
+
+                      return (
+                        itemTaskId ===
+                        selectedTaskId
+                      );
+                    }
                   );
 
 
                 if (!selectedTask) {
+
+                  console.error(
+                    "❌ Selected task not found:",
+                    selectedTaskId
+                  );
 
                   return;
                 }
@@ -5609,7 +6513,9 @@ function renderDailyTasks(
 
                 const messageElement =
                   button
-                    .closest(".task-card")
+                    .closest(
+                      ".task-card"
+                    )
                     ?.querySelector(
                       ".task-message"
                     );
@@ -5668,7 +6574,8 @@ function updateTaskSummary(
   }
 
 
-  let message = "";
+  let message =
+    "";
 
 
   if (isSunday) {
@@ -5766,7 +6673,7 @@ function updateTaskSummary(
 
 
 /* =========================================================
-UPDATE AFTER SUCCESS
+UPDATE AFTER SUCCESSFUL CLAIM
 ========================================================= */
 
 function updateTaskAfterSuccessfulClaim(
@@ -5774,7 +6681,9 @@ function updateTaskAfterSuccessfulClaim(
 ) {
 
   const id =
-    String(taskId);
+    String(
+      taskId
+    );
 
 
   if (
@@ -5785,13 +6694,36 @@ function updateTaskAfterSuccessfulClaim(
 
     window.dailyTasksCache =
       window.dailyTasksCache.map(
-        task =>
-          String(task.id) === id
-            ? {
-                ...task,
-                submitted: true
-              }
-            : task
+        task => {
+
+          const currentId =
+            String(
+              task.taskId ??
+              task.id
+            );
+
+
+          if (
+            currentId !== id
+          ) {
+
+            return task;
+          }
+
+
+          return {
+
+            ...task,
+
+            id,
+
+            taskId:
+              id,
+
+            submitted:
+              true
+          };
+        }
       );
   }
 
@@ -5804,10 +6736,12 @@ function updateTaskAfterSuccessfulClaim(
     Array.isArray(
       window.dailyTasksCache
     )
+
       ? window.dailyTasksCache.filter(
           task =>
             task.submitted === true
         ).length
+
       : Number(
           meta.claimedCount || 0
         ) + 1;
@@ -5895,7 +6829,7 @@ function updateTaskAfterSuccessfulClaim(
 
 /* =========================================================
 CLAIM TASK
-FINAL PERMISSION-SAFE VERSION
+FINAL FIX
 ========================================================= */
 
 async function claimTask(
@@ -5906,8 +6840,7 @@ async function claimTask(
 
   if (
     !currentUser ||
-    !task ||
-    !task.id
+    !task
   ) {
 
     return;
@@ -5920,10 +6853,27 @@ async function claimTask(
     );
 
 
+  /* -------------------------------------------------------
+     REAL FIRESTORE TASK ID
+  ------------------------------------------------------- */
+
   const taskId =
     String(
-      task.id
+      task.taskId ??
+      task.id ??
+      ""
     );
+
+
+  if (!taskId) {
+
+    console.error(
+      "❌ CLAIM TASK: Missing task ID.",
+      task
+    );
+
+    return;
+  }
 
 
   const today =
@@ -5935,7 +6885,7 @@ async function claimTask(
 
 
   const lockKey =
-    `${userId}_${today}_${taskId}`;
+    `${userId}_${claimId}`;
 
 
   if (
@@ -5976,7 +6926,7 @@ async function claimTask(
 
     /* ===================================================
        1. OPERATING STATUS
-       =================================================== */
+    =================================================== */
 
     const status =
       await getSafeTaskOperatingStatus();
@@ -6017,7 +6967,7 @@ async function claimTask(
 
     /* ===================================================
        2. SETTINGS
-       =================================================== */
+    =================================================== */
 
     const settings =
       await loadTaskSettings();
@@ -6035,7 +6985,7 @@ async function claimTask(
 
     /* ===================================================
        3. CURRENT APPROVED LEVEL
-       =================================================== */
+    =================================================== */
 
     const level =
       await getApprovedRechargeLevel(
@@ -6053,7 +7003,7 @@ async function claimTask(
 
     /* ===================================================
        4. DAILY LIMIT
-       =================================================== */
+    =================================================== */
 
     const dailyLimit =
       Math.max(
@@ -6100,13 +7050,25 @@ async function claimTask(
 
 
     /* ===================================================
-       5. TODAY CLAIMS
-       =================================================== */
+       5. PRE-CHECK CLAIM
+    =================================================== */
 
     const todayClaims =
       await getTodayTaskClaims(
         userId
       );
+
+
+    if (
+      todayClaims.ids.has(
+        taskId
+      )
+    ) {
+
+      throw new Error(
+        "Task already completed today."
+      );
+    }
 
 
     if (
@@ -6121,24 +7083,14 @@ async function claimTask(
 
 
     /* ===================================================
-       6. DUPLICATE TASK
-       =================================================== */
+       6. FIRESTORE REFERENCES
 
-    if (
-      todayClaims.ids.has(
-        taskId
-      )
-    ) {
+       IMPORTANT:
+       Every transaction.get() below receives
+       DocumentReference.
 
-      throw new Error(
-        "Task already completed today."
-      );
-    }
-
-
-    /* ===================================================
-       7. FIRESTORE REFERENCES
-       =================================================== */
+       NO transaction.get(query).
+    =================================================== */
 
     const userRef =
       doc(
@@ -6166,22 +7118,52 @@ async function claimTask(
       );
 
 
+    /*
+     * NEW:
+     *
+     * users/{uid}/taskDailyStats/{YYYY-MM-DD}
+     *
+     * This document is the atomic daily counter.
+     */
+
+    const dailyStatsRef =
+      doc(
+        db,
+        "users",
+        userId,
+        "taskDailyStats",
+        today
+      );
+
+
     let claimedReward =
       0;
 
 
+    let claimedTaskTitle =
+      "";
+
+
+    let claimedTaskNumber =
+      Number(
+        task.taskNumber ?? 0
+      );
+
+
     /* ===================================================
-       8. ATOMIC TRANSACTION
-       =================================================== */
+       7. ATOMIC TRANSACTION
+    =================================================== */
 
     await runTransaction(
       db,
       async transaction => {
 
         /* ------------------------------------------------
+           ALL TRANSACTION READS FIRST
+           
            IMPORTANT:
-           ALL READS FIRST
-           ------------------------------------------------ */
+           ALL ARE DOCUMENT REFERENCES.
+        ------------------------------------------------ */
 
         const userSnap =
           await transaction.get(
@@ -6201,9 +7183,15 @@ async function claimTask(
           );
 
 
+        const dailyStatsSnap =
+          await transaction.get(
+            dailyStatsRef
+          );
+
+
         /* ------------------------------------------------
            USER
-           ------------------------------------------------ */
+        ------------------------------------------------ */
 
         if (
           !userSnap.exists()
@@ -6217,7 +7205,7 @@ async function claimTask(
 
         /* ------------------------------------------------
            TASK
-           ------------------------------------------------ */
+        ------------------------------------------------ */
 
         if (
           !taskSnap.exists()
@@ -6230,8 +7218,8 @@ async function claimTask(
 
 
         /* ------------------------------------------------
-           CLAIM
-           ------------------------------------------------ */
+           DUPLICATE CLAIM
+        ------------------------------------------------ */
 
         if (
           claimSnap.exists()
@@ -6244,8 +7232,60 @@ async function claimTask(
 
 
         /* ------------------------------------------------
+           DAILY STATS
+        ------------------------------------------------ */
+
+        const dailyStats =
+          dailyStatsSnap.exists()
+            ? (
+                dailyStatsSnap.data() ||
+                {}
+              )
+            : {};
+
+
+        let transactionClaimCount =
+          Number(
+            dailyStats.claimedCount ?? 0
+          );
+
+
+        if (
+          !Number.isFinite(
+            transactionClaimCount
+          ) ||
+          transactionClaimCount < 0
+        ) {
+
+          transactionClaimCount =
+            0;
+        }
+
+
+        transactionClaimCount =
+          Math.floor(
+            transactionClaimCount
+          );
+
+
+        /* ------------------------------------------------
+           DAILY LIMIT - ATOMIC
+        ------------------------------------------------ */
+
+        if (
+          transactionClaimCount >=
+          dailyLimit
+        ) {
+
+          throw new Error(
+            `Your daily task limit of ${dailyLimit} has been reached.`
+          );
+        }
+
+
+        /* ------------------------------------------------
            TASK DATA
-           ------------------------------------------------ */
+        ------------------------------------------------ */
 
         const taskData =
           taskSnap.data() || {};
@@ -6253,7 +7293,7 @@ async function claimTask(
 
         /* ------------------------------------------------
            ACTIVE
-           ------------------------------------------------ */
+        ------------------------------------------------ */
 
         if (
           !isTaskActiveValue(
@@ -6268,23 +7308,40 @@ async function claimTask(
 
 
         /* ------------------------------------------------
-           REWARD
+           AUTHORITATIVE REWARD
            
-           Firestore task reward is authoritative.
-           ------------------------------------------------ */
+           ONLY:
+           tasks/{taskId}.reward
+        ------------------------------------------------ */
+
+        const rawReward =
+          taskData.reward;
+
 
         const reward =
           Number(
-            taskData.reward ??
-            taskData.rewardAmount ??
-            0
+            rawReward
           );
 
 
         if (
+          rawReward === null ||
+          rawReward === undefined ||
+          rawReward === "" ||
           !Number.isFinite(reward) ||
           reward <= 0
         ) {
+
+          console.error(
+            "❌ INVALID TASK REWARD:",
+            {
+
+              taskId,
+
+              taskData
+            }
+          );
+
 
           throw new Error(
             "Invalid task reward."
@@ -6296,9 +7353,41 @@ async function claimTask(
           reward;
 
 
+        claimedTaskTitle =
+          String(
+            taskData.title ??
+            taskData.name ??
+            "Daily Task"
+          ).trim();
+
+
+        /* ------------------------------------------------
+           TASK NUMBER
+        ------------------------------------------------ */
+
+        claimedTaskNumber =
+          Number(
+            task.taskNumber ??
+            taskData.taskNumber ??
+            taskData.order ??
+            0
+          );
+
+
+        if (
+          !Number.isFinite(
+            claimedTaskNumber
+          )
+        ) {
+
+          claimedTaskNumber =
+            0;
+        }
+
+
         /* ------------------------------------------------
            USER DATA
-           ------------------------------------------------ */
+        ------------------------------------------------ */
 
         const userData =
           userSnap.data() || {};
@@ -6321,20 +7410,8 @@ async function claimTask(
 
 
         /* ------------------------------------------------
-           IMPORTANT SECURITY RULES
-           
-           We do NOT:
-           - change totalRecharge
-           - change vipLevel
-           - change taskLimit
-           - change role
-           - change isAdmin
-           ------------------------------------------------ */
-
-
-        /* ------------------------------------------------
-           CREATE CLAIM
-           ------------------------------------------------ */
+           NEW CLAIM
+        ------------------------------------------------ */
 
         transaction.set(
           claimRef,
@@ -6346,11 +7423,11 @@ async function claimTask(
             taskId:
               taskId,
 
+            taskTitle:
+              claimedTaskTitle,
+
             taskNumber:
-              Number(
-                task.taskNumber ??
-                0
-              ),
+              claimedTaskNumber,
 
             reward:
               reward,
@@ -6358,8 +7435,44 @@ async function claimTask(
             date:
               today,
 
+            claimDate:
+              today,
+
+            claimedAt:
+              serverTimestamp(),
+
             createdAt:
               serverTimestamp()
+          }
+        );
+
+
+        /* ------------------------------------------------
+           ATOMIC DAILY COUNTER
+        ------------------------------------------------ */
+
+        transaction.set(
+          dailyStatsRef,
+          {
+
+            date:
+              today,
+
+            claimedCount:
+              transactionClaimCount + 1,
+
+            lastTaskId:
+              taskId,
+
+            lastClaimAt:
+              serverTimestamp(),
+
+            updatedAt:
+              serverTimestamp()
+          },
+
+          {
+            merge: true
           }
         );
 
@@ -6369,9 +7482,12 @@ async function claimTask(
            
            ONLY:
            totalBalance
-           lastTaskClaimId
-           updatedAt
-           ------------------------------------------------ */
+           
+           NEVER:
+           totalRecharge
+           vipLevel
+           taskLimit
+        ------------------------------------------------ */
 
         transaction.update(
           userRef,
@@ -6393,7 +7509,7 @@ async function claimTask(
 
     /* ===================================================
        SUCCESS
-       =================================================== */
+    =================================================== */
 
     if (button) {
 
@@ -6422,7 +7538,7 @@ async function claimTask(
 
     /* ===================================================
        UPDATE USER UI
-       =================================================== */
+    =================================================== */
 
     if (
       typeof updateUserUI ===
@@ -6459,8 +7575,8 @@ async function claimTask(
 
 
     /* ---------------------------------------------------
-       FIRESTORE PERMISSION
-       --------------------------------------------------- */
+       PERMISSION
+    --------------------------------------------------- */
 
     if (
       error?.code ===
@@ -6468,9 +7584,13 @@ async function claimTask(
     ) {
 
       userMessage =
-        "Missing or insufficient permissions. Firestore Rules keessatti task claim update hayyamamuu qaba.";
+        "Missing or insufficient permissions. Firestore Rules keessatti task claim, daily stats fi balance update hayyamamuu qaba.";
     }
 
+
+    /* ---------------------------------------------------
+       FAILED PRECONDITION
+    --------------------------------------------------- */
 
     if (
       error?.code ===
@@ -6478,7 +7598,21 @@ async function claimTask(
     ) {
 
       userMessage =
-        "Firestore transaction failed. Mee network fi Firestore index ilaali.";
+        "Firestore transaction failed. Mee Firestore Rules fi network ilaali.";
+    }
+
+
+    /* ---------------------------------------------------
+       ABORTED
+    --------------------------------------------------- */
+
+    if (
+      error?.code ===
+      "aborted"
+    ) {
+
+      userMessage =
+        "Transaction irra deebiin yaalame. Mee task sana ammas yaali.";
     }
 
 
@@ -6506,7 +7640,7 @@ async function claimTask(
 
     /* ---------------------------------------------------
        REFRESH CLAIM COUNT
-       --------------------------------------------------- */
+    --------------------------------------------------- */
 
     try {
 
@@ -6562,7 +7696,7 @@ async function claimTask(
 
 
 /* =========================================================
-DEBUG - CURRENT LEVEL
+DEBUG - CURRENT TASK LEVEL
 ========================================================= */
 
 window.checkCCUSCurrentTaskLevel =
@@ -6697,27 +7831,101 @@ window.checkCCUSTodayClaims =
         getLocalDateString();
 
 
-      const snap =
-        await getDocs(
-          query(
-            collection(
-              db,
-              "users",
-              currentUser.uid,
-              "taskClaims"
-            ),
-
-            where(
-              "date",
-              "==",
-              today
-            )
-          )
+      const claimsRef =
+        collection(
+          db,
+          "users",
+          currentUser.uid,
+          "taskClaims"
         );
 
 
+      const claimsMap =
+        new Map();
+
+
+      /* ---------------------------------------------------
+         DATE
+      --------------------------------------------------- */
+
+      try {
+
+        const snap =
+          await getDocs(
+            query(
+              claimsRef,
+
+              where(
+                "date",
+                "==",
+                today
+              )
+            )
+          );
+
+
+        snap.docs.forEach(
+          item => {
+
+            claimsMap.set(
+              item.id,
+              item
+            );
+          }
+        );
+
+      } catch (error) {
+
+        console.warn(
+          "⚠️ Debug date query warning:",
+          error
+        );
+      }
+
+
+      /* ---------------------------------------------------
+         CLAIM DATE
+      --------------------------------------------------- */
+
+      try {
+
+        const snap =
+          await getDocs(
+            query(
+              claimsRef,
+
+              where(
+                "claimDate",
+                "==",
+                today
+              )
+            )
+          );
+
+
+        snap.docs.forEach(
+          item => {
+
+            claimsMap.set(
+              item.id,
+              item
+            );
+          }
+        );
+
+      } catch (error) {
+
+        console.warn(
+          "⚠️ Debug claimDate query warning:",
+          error
+        );
+      }
+
+
       const claims =
-        snap.docs.map(
+        Array.from(
+          claimsMap.values()
+        ).map(
           item => {
 
             const data =
@@ -6733,6 +7941,10 @@ window.checkCCUSTodayClaims =
                 data.taskId ??
                 null,
 
+              taskTitle:
+                data.taskTitle ??
+                null,
+
               taskNumber:
                 data.taskNumber ??
                 null,
@@ -6744,6 +7956,7 @@ window.checkCCUSTodayClaims =
 
               date:
                 data.date ??
+                data.claimDate ??
                 null
             };
           }
@@ -6752,10 +7965,11 @@ window.checkCCUSTodayClaims =
 
       const result = {
 
-        date: today,
+        date:
+          today,
 
         claimedCount:
-          snap.size,
+          claims.length,
 
         claims
       };
@@ -6900,6 +8114,93 @@ window.checkCCUSUserTaskInfo =
 
 
 /* =========================================================
+DEBUG - TODAY ATOMIC TASK STATS
+========================================================= */
+
+window.checkCCUSTodayTaskStats =
+  async function () {
+
+    try {
+
+      if (!currentUser) {
+
+        console.warn(
+          "No current user."
+        );
+
+        return null;
+      }
+
+
+      const today =
+        getLocalDateString();
+
+
+      const statsRef =
+        doc(
+          db,
+          "users",
+          currentUser.uid,
+          "taskDailyStats",
+          today
+        );
+
+
+      const snap =
+        await getDoc(
+          statsRef
+        );
+
+
+      const result =
+        snap.exists()
+          ? {
+
+              exists:
+                true,
+
+              id:
+                snap.id,
+
+              ...(
+                snap.data() || {}
+              )
+            }
+
+          : {
+
+              exists:
+                false,
+
+              id:
+                today,
+
+              claimedCount:
+                0
+            };
+
+
+      console.log(
+        "CCUS TODAY TASK STATS:",
+        result
+      );
+
+
+      return result;
+
+    } catch (error) {
+
+      console.error(
+        "❌ Today task stats error:",
+        error
+      );
+
+      return null;
+    }
+  };
+
+
+/* =========================================================
 FORCE REFRESH
 ========================================================= */
 
@@ -6962,6 +8263,10 @@ window.testCCUSTaskSystem =
       await window.checkCCUSUserTaskInfo();
 
 
+    const stats =
+      await window.checkCCUSTodayTaskStats();
+
+
     console.log(
       "LEVEL:",
       level
@@ -6981,6 +8286,12 @@ window.testCCUSTaskSystem =
 
 
     console.log(
+      "TODAY STATS:",
+      stats
+    );
+
+
+    console.log(
       "========== END TEST =========="
     );
 
@@ -6991,14 +8302,17 @@ window.testCCUSTaskSystem =
 
       claims,
 
-      user
+      user,
+
+      stats
     };
   };
 
 
 /* =========================================================
 END CCUS DAILY TASK SYSTEM
-========================================================= */
+========================================================= */ 
+
 /* =========================================================
    CCUS USER APP
    ANNOUNCEMENTS + REFERRAL / TEAM + ADMIN NAVIGATION
