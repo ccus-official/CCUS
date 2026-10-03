@@ -6912,6 +6912,87 @@ function userCardHTML(
 
 
 /* =========================================================
+   CCUS ADMIN - TASK SETTINGS + TASK MANAGEMENT
+   FINAL STABLE VERSION
+
+   IMPORTANT RULES
+   ---------------------------------------------------------
+   1. Each task has its OWN Firestore reward.
+
+   2. taskSettings.rewardPerTask is NOT the authoritative
+      reward for individual tasks.
+
+   3. Firestore:
+        tasks/{taskId}.reward
+      is the ONLY authoritative task reward.
+
+   4. Every active task must have:
+        reward > 0
+
+   5. Invalid reward cannot be saved.
+
+   6. Toggle ACTIVE / INACTIVE never changes reward.
+
+   7. Task ID is the REAL Firestore document ID.
+
+   8. Task LIMIT is NOT managed here.
+      User taskLimit must be updated by the
+      APPROVED RECHARGE / LEVEL logic.
+
+   9. Task claim logic must enforce:
+        users/{uid}.taskLimit
+
+   10. taskSettings.rewardPerTask is retained only
+       for admin configuration / compatibility UI.
+========================================================= */
+
+
+/* =========================================================
+   SAFE NUMBER
+========================================================= */
+
+function taskAdminSafeNumber(value, fallback = 0) {
+
+  const number =
+    Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : fallback;
+}
+
+
+/* =========================================================
+   TASK REWARD VALIDATOR
+========================================================= */
+
+function isValidAdminTaskReward(value) {
+
+  const reward =
+    Number(value);
+
+  return (
+    Number.isFinite(reward) &&
+    reward > 0
+  );
+}
+
+
+/* =========================================================
+   TASK TITLE
+========================================================= */
+
+function getAdminTaskTitle(data = {}) {
+
+  return String(
+    data.title ??
+    data.name ??
+    "Task"
+  ).trim() || "Task";
+}
+
+
+/* =========================================================
    TASK SETTINGS
 ========================================================= */
 
@@ -6926,12 +7007,30 @@ async function loadTaskSettings() {
         "taskSettings"
       );
 
-
     const snap =
       await getDoc(ref);
 
+    const activeInput =
+      $("taskSettingsActive");
+
+    const rewardInput =
+      $("taskSettingsReward");
+
+
+    /* -------------------------------------------------------
+       DOCUMENT DOES NOT EXIST
+    ------------------------------------------------------- */
 
     if (!snap.exists()) {
+
+      if (activeInput) {
+        activeInput.checked = true;
+      }
+
+      if (rewardInput) {
+        rewardInput.value = "";
+      }
+
       return;
     }
 
@@ -6940,130 +7039,179 @@ async function loadTaskSettings() {
       snap.data() || {};
 
 
-    const active =
-      $("taskSettingsActive");
+    /* -------------------------------------------------------
+       ACTIVE
+    ------------------------------------------------------- */
 
+    if (activeInput) {
 
-    const reward =
-      $("taskSettingsReward");
-
-
-    if (active) {
-
-      active.checked =
+      activeInput.checked =
         data.active !== false;
     }
 
 
-    if (reward) {
+    /* -------------------------------------------------------
+       GLOBAL REWARD
+       IMPORTANT:
+       This value is NOT used for individual tasks.
+    ------------------------------------------------------- */
 
-      reward.value =
-        safeNumber(
+    if (rewardInput) {
+
+      const value =
+        Number(
           data.rewardPerTask
         );
+
+      rewardInput.value =
+        Number.isFinite(value)
+          ? value
+          : "";
     }
+
+
+    console.log(
+      "⚙️ TASK SETTINGS LOADED:",
+      {
+        active:
+          data.active !== false,
+
+        rewardPerTask:
+          data.rewardPerTask
+      }
+    );
 
   } catch (error) {
 
     console.error(
-      "Load task settings error:",
+      "❌ Load task settings error:",
       error
     );
+
   }
 }
 
 
 /* =========================================================
    SAVE TASK SETTINGS
+
+   IMPORTANT:
+   rewardPerTask is ONLY an admin setting.
+
+   It MUST NOT replace:
+      tasks/{taskId}.reward
 ========================================================= */
 
 window.saveTaskSettings =
-  async function () {
+async function () {
 
-    if (!currentAdmin) {
+  if (!currentAdmin?.uid) {
 
-      return showMessage(
-        "adminTaskMessage",
-        "Admin session not found.",
-        "error"
-      );
-    }
-
-
-    const active =
-      $("taskSettingsActive")
-        ?.checked !== false;
+    return showMessage(
+      "adminTaskMessage",
+      "Admin session not found.",
+      "error"
+    );
+  }
 
 
-    const rewardPerTask =
-      safeNumber(
-        $("taskSettingsReward")
-          ?.value
-      );
+  const active =
+    $("taskSettingsActive")
+      ?.checked !== false;
 
 
-    if (
-      rewardPerTask < 0
-    ) {
-
-      return showMessage(
-        "adminTaskMessage",
-        "Reward cannot be negative.",
-        "error"
-      );
-    }
+  const rewardInput =
+    $("taskSettingsReward")
+      ?.value;
 
 
-    try {
-
-      await setDoc(
-        doc(
-          db,
-          "settings",
-          "taskSettings"
-        ),
-        {
-          active,
-
-          rewardPerTask,
-
-          updatedAt:
-            serverTimestamp(),
-
-          updatedBy:
-            currentAdmin.uid
-        },
-        {
-          merge: true
-        }
-      );
+  const rewardPerTask =
+    Number(
+      rewardInput
+    );
 
 
-      showMessage(
-        "adminTaskMessage",
-        "Task settings saved successfully.",
-        "success"
-      );
+  if (
+    rewardInput === undefined ||
+    rewardInput === null ||
+    rewardInput === "" ||
+    !Number.isFinite(
+      rewardPerTask
+    ) ||
+    rewardPerTask <= 0
+  ) {
 
-    } catch (error) {
+    return showMessage(
+      "adminTaskMessage",
+      "Reward must be greater than 0.",
+      "error"
+    );
+  }
 
-      console.error(
-        "Save task settings error:",
-        error
-      );
 
-      showMessage(
-        "adminTaskMessage",
-        error?.message ||
-        "Failed to save task settings.",
-        "error"
-      );
-    }
-  };
+  try {
+
+    await setDoc(
+      doc(
+        db,
+        "settings",
+        "taskSettings"
+      ),
+      {
+
+        active,
+
+        rewardPerTask,
+
+        updatedAt:
+          serverTimestamp(),
+
+        updatedBy:
+          currentAdmin.uid
+
+      },
+      {
+        merge: true
+      }
+    );
+
+
+    console.log(
+      "✅ TASK SETTINGS SAVED:",
+      {
+        active,
+        rewardPerTask
+      }
+    );
+
+
+    showMessage(
+      "adminTaskMessage",
+      "Task settings saved successfully.",
+      "success"
+    );
+
+  } catch (error) {
+
+    console.error(
+      "❌ Save task settings error:",
+      error
+    );
+
+
+    showMessage(
+      "adminTaskMessage",
+      error?.message ||
+      "Failed to save task settings.",
+      "error"
+    );
+
+  }
+};
 
 
 /* =========================================================
-   TASKS
+   LOAD ADMIN TASKS
 ========================================================= */
 
 async function loadAdminTasks() {
@@ -7098,22 +7246,55 @@ async function loadAdminTasks() {
     const items =
       snapshot.docs
         .map(
-          docSnap => ({
-            id:
-              docSnap.id,
+          docSnap => {
 
-            ...(docSnap.data() || {})
-          })
+            const data =
+              docSnap.data() || {};
+
+
+            return {
+
+              /* REAL FIRESTORE DOCUMENT ID */
+              id:
+                docSnap.id,
+
+              ...data
+
+            };
+
+          }
         )
         .sort(
-          (a, b) =>
-            safeNumber(a.order) -
-            safeNumber(b.order)
+          (a, b) => {
+
+            const orderA =
+              taskAdminSafeNumber(
+                a.order
+              );
+
+            const orderB =
+              taskAdminSafeNumber(
+                b.order
+              );
+
+            return (
+              orderA -
+              orderB
+            );
+
+          }
         );
+
+
+    console.log(
+      "📋 ADMIN TASK COUNT:",
+      items.length
+    );
 
 
     container.innerHTML =
       items.length
+
         ? items
             .map(
               item =>
@@ -7123,22 +7304,27 @@ async function loadAdminTasks() {
                 )
             )
             .join("")
+
         : emptyHTML(
             "📝",
             "No Tasks"
           );
 
+
   } catch (error) {
 
     console.error(
-      "Load tasks error:",
+      "❌ Load tasks error:",
       error
     );
 
+
     container.innerHTML =
       errorHTML(
-        error?.message
+        error?.message ||
+        "Failed to load tasks."
       );
+
   }
 }
 
@@ -7149,36 +7335,92 @@ async function loadAdminTasks() {
 
 function taskCardHTML(
   id,
-  data
+  data = {}
 ) {
 
   const active =
     data.active !== false;
 
 
+  const reward =
+    Number(
+      data.reward
+    );
+
+
+  const validReward =
+    isValidAdminTaskReward(
+      reward
+    );
+
+
+  const rewardDisplay =
+    validReward
+
+      ? formatAdminMoney(
+          reward
+        )
+
+      : "INVALID";
+
+
+  const title =
+    getAdminTaskTitle(
+      data
+    );
+
+
+  const description =
+    String(
+      data.description ??
+      data.message ??
+      ""
+    );
+
+
+  const order =
+    taskAdminSafeNumber(
+      data.order
+    );
+
+
+  const safeId =
+    escapeHTML(
+      String(id)
+    );
+
+
   return `
 
-    <div class="admin-task-card">
+    <div
+      class="admin-task-card"
+      data-task-id="${safeId}"
+    >
 
       <div class="admin-card-header">
 
         <div>
 
           <h3>
+
             📝
+
             ${escapeHTML(
-              data.title ||
-              data.name ||
-              "Task"
+              title
             )}
+
           </h3>
 
+
           <small>
+
             Order:
-            ${safeNumber(data.order)}
+            ${order}
+
           </small>
 
         </div>
+
 
         <span
           class="${
@@ -7187,31 +7429,52 @@ function taskCardHTML(
               : "status-inactive"
           }"
         >
-          ${active ? "Active" : "Inactive"}
+
+          ${
+            active
+              ? "Active"
+              : "Inactive"
+          }
+
         </span>
 
       </div>
 
 
       <p>
+
         ${escapeHTML(
-          data.description ||
-          data.message ||
-          ""
+          description
         )}
+
       </p>
 
 
       <div class="admin-card-grid">
 
         <div>
-          <small>Reward</small>
-          <strong>
-            ETB
-            ${formatAdminMoney(
-              data.reward
-            )}
+
+          <small>
+            Reward
+          </small>
+
+
+          <strong
+            ${
+              !validReward
+                ? 'style="color:#d00;"'
+                : ""
+            }
+          >
+
+            ${
+              validReward
+                ? `ETB ${rewardDisplay}`
+                : "⚠️ INVALID REWARD"
+            }
+
           </strong>
+
         </div>
 
       </div>
@@ -7219,178 +7482,269 @@ function taskCardHTML(
 
       <div class="admin-action-row">
 
-        <button
-          type="button"
-          class="admin-secondary-btn"
-          onclick="window.editAdminTask('${escapeHTML(id)}')"
-        >
-          ✏️ Edit
-        </button>
 
         <button
           type="button"
           class="admin-secondary-btn"
-          onclick="window.toggleAdminTask('${escapeHTML(id)}', ${active})"
+          onclick="window.editAdminTask('${safeId}')"
         >
-          ${active ? "Disable" : "Activate"}
+
+          ✏️ Edit
+
         </button>
+
+
+        <button
+          type="button"
+          class="admin-secondary-btn"
+          onclick="window.toggleAdminTask('${safeId}', ${active})"
+        >
+
+          ${
+            active
+              ? "Disable"
+              : "Activate"
+          }
+
+        </button>
+
 
         <button
           type="button"
           class="admin-danger-btn"
-          onclick="window.deleteAdminTask('${escapeHTML(id)}')"
+          onclick="window.deleteAdminTask('${safeId}')"
         >
+
           🗑️ Delete
+
         </button>
+
 
       </div>
 
     </div>
+
   `;
 }
 
 
 /* =========================================================
    ADD TASK
+
+   Each task MUST have its own reward.
+
+   Example:
+     Task 1 -> reward 28
+     Task 2 -> reward 35
+     Task 3 -> reward 50
+
+   No global reward fallback.
 ========================================================= */
 
 window.addAdminTask =
-  async function () {
+async function () {
 
-    const title =
-      $("newTaskTitle")
-        ?.value
-        ?.trim();
+  if (!currentAdmin?.uid) {
 
-
-    const description =
-      $("newTaskDescription")
-        ?.value
-        ?.trim();
+    return showMessage(
+      "adminTaskMessage",
+      "Admin session not found.",
+      "error"
+    );
+  }
 
 
-    const order =
-      Math.floor(
-        safeNumber(
-          $("newTaskOrder")
-            ?.value
-        )
-      );
+  const title =
+    $("newTaskTitle")
+      ?.value
+      ?.trim();
 
 
-    const active =
-      $("newTaskActive")
-        ? $("newTaskActive").checked !== false
-        : true;
+  const description =
+    $("newTaskDescription")
+      ?.value
+      ?.trim();
 
 
-    if (!title) {
+  const order =
+    Math.floor(
+      taskAdminSafeNumber(
+        $("newTaskOrder")
+          ?.value
+      )
+    );
 
-      return showMessage(
-        "adminTaskMessage",
-        "Task title is required.",
-        "error"
-      );
-    }
+
+  const rewardInput =
+    $("newTaskReward")
+      ?.value;
 
 
-    try {
+  const active =
+    $("newTaskActive")
+      ? $("newTaskActive")
+          .checked !== false
+      : true;
+
+
+  /* -------------------------------------------------------
+     TITLE
+  ------------------------------------------------------- */
+
+  if (!title) {
+
+    return showMessage(
+      "adminTaskMessage",
+      "Task title is required.",
+      "error"
+    );
+  }
+
+
+  /* -------------------------------------------------------
+     REWARD
+  ------------------------------------------------------- */
+
+  const reward =
+    Number(
+      rewardInput
+    );
+
+
+  if (
+    rewardInput === undefined ||
+    rewardInput === null ||
+    rewardInput === "" ||
+    !Number.isFinite(reward) ||
+    reward <= 0
+  ) {
+
+    return showMessage(
+      "adminTaskMessage",
+      "Task reward is required and must be greater than 0.",
+      "error"
+    );
+  }
+
+
+  /* -------------------------------------------------------
+     ORDER
+  ------------------------------------------------------- */
+
+  if (
+    !Number.isFinite(order) ||
+    order < 0
+  ) {
+
+    return showMessage(
+      "adminTaskMessage",
+      "Invalid task order.",
+      "error"
+    );
+  }
+
+
+  try {
+
+    const taskData = {
+
+      title,
+
+      name:
+        title,
+
+      description:
+        description || "",
+
+      message:
+        description || "",
+
+      order,
 
       /*
-         Reward comes from global
-         settings/taskSettings.
-      */
+       * AUTHORITATIVE REWARD
+       */
+      reward,
 
-      const settingsSnap =
-        await getDoc(
-          doc(
-            db,
-            "settings",
-            "taskSettings"
-          )
-        );
+      active,
 
+      createdAt:
+        serverTimestamp(),
 
-      const settings =
-        settingsSnap.exists()
-          ? settingsSnap.data() || {}
-          : {};
+      createdBy:
+        currentAdmin.uid,
 
+      updatedAt:
+        serverTimestamp(),
 
-      const reward =
-        safeNumber(
-          settings.rewardPerTask
-        );
+      updatedBy:
+        currentAdmin.uid
+
+    };
 
 
+    const taskRef =
       await addDoc(
         collection(
           db,
           "tasks"
         ),
-        {
-          title,
-
-          name:
-            title,
-
-          description,
-
-          message:
-            description,
-
-          order,
-
-          reward,
-
-          active,
-
-          createdAt:
-            serverTimestamp(),
-
-          createdBy:
-            currentAdmin.uid,
-
-          updatedAt:
-            serverTimestamp(),
-
-          updatedBy:
-            currentAdmin.uid
-        }
+        taskData
       );
 
 
-      clearInputs(
-        "newTaskTitle",
-        "newTaskDescription",
-        "newTaskOrder"
-      );
+    console.log(
+      "✅ TASK CREATED:",
+      {
+        id:
+          taskRef.id,
+
+        title,
+
+        reward,
+
+        order,
+
+        active
+      }
+    );
 
 
-      showMessage(
-        "adminTaskMessage",
-        "Task added successfully.",
-        "success"
-      );
+    clearInputs(
+      "newTaskTitle",
+      "newTaskDescription",
+      "newTaskOrder",
+      "newTaskReward"
+    );
 
 
-      await loadAdminTasks();
+    showMessage(
+      "adminTaskMessage",
+      "Task added successfully.",
+      "success"
+    );
 
-    } catch (error) {
 
-      console.error(
-        "Add task error:",
-        error
-      );
+    await loadAdminTasks();
 
-      showMessage(
-        "adminTaskMessage",
-        error?.message ||
-        "Failed to add task.",
-        "error"
-      );
-    }
-  };
+
+  } catch (error) {
+
+    console.error(
+      "❌ Add task error:",
+      error
+    );
+
+
+    showMessage(
+      "adminTaskMessage",
+      error?.message ||
+      "Failed to add task.",
+      "error"
+    );
+
+  }
+};
 
 
 /* =========================================================
@@ -7398,184 +7752,410 @@ window.addAdminTask =
 ========================================================= */
 
 window.editAdminTask =
-  async function (id) {
+async function (id) {
 
-    try {
+  if (!currentAdmin?.uid) {
 
-      const ref =
-        doc(
-          db,
-          "tasks",
-          id
-        );
+    return alert(
+      "Admin session not found."
+    );
+  }
 
 
-      const snap =
-        await getDoc(ref);
+  if (!id) {
+
+    return alert(
+      "Invalid task ID."
+    );
+  }
 
 
-      if (!snap.exists()) {
-        return alert(
-          "Task not found."
-        );
-      }
+  try {
 
-
-      const data =
-        snap.data() || {};
-
-
-      const title =
-        prompt(
-          "Task title:",
-          data.title ||
-          data.name ||
-          ""
-        );
-
-
-      if (title === null) {
-        return;
-      }
-
-
-      const description =
-        prompt(
-          "Description:",
-          data.description ||
-          data.message ||
-          ""
-        );
-
-
-      if (
-        description === null
-      ) {
-        return;
-      }
-
-
-      const order =
-        prompt(
-          "Order:",
-          data.order ?? 0
-        );
-
-
-      if (order === null) {
-        return;
-      }
-
-
-      const reward =
-        prompt(
-          "Reward:",
-          data.reward ?? 0
-        );
-
-
-      if (
-        reward === null
-      ) {
-        return;
-      }
-
-
-      await updateDoc(
-        ref,
-        {
-          title:
-            title.trim(),
-
-          name:
-            title.trim(),
-
-          description:
-            description.trim(),
-
-          message:
-            description.trim(),
-
-          order:
-            Math.floor(
-              safeNumber(order)
-            ),
-
-          reward:
-            safeNumber(reward),
-
-          updatedAt:
-            serverTimestamp(),
-
-          updatedBy:
-            currentAdmin.uid
-        }
+    const ref =
+      doc(
+        db,
+        "tasks",
+        String(id)
       );
 
 
-      await loadAdminTasks();
-
-    } catch (error) {
-
-      console.error(
-        "Edit task error:",
-        error
+    const snap =
+      await getDoc(
+        ref
       );
 
-      alert(
-        error?.message ||
-        "Failed to edit task."
+
+    if (!snap.exists()) {
+
+      return alert(
+        "Task not found."
       );
     }
-  };
+
+
+    const data =
+      snap.data() || {};
+
+
+    /* -----------------------------------------------------
+       TITLE
+    ----------------------------------------------------- */
+
+    const title =
+      prompt(
+        "Task title:",
+        getAdminTaskTitle(
+          data
+        )
+      );
+
+
+    if (title === null) {
+      return;
+    }
+
+
+    const cleanTitle =
+      title.trim();
+
+
+    if (!cleanTitle) {
+
+      return alert(
+        "Task title is required."
+      );
+    }
+
+
+    /* -----------------------------------------------------
+       DESCRIPTION
+    ----------------------------------------------------- */
+
+    const description =
+      prompt(
+        "Description:",
+        String(
+          data.description ??
+          data.message ??
+          ""
+        )
+      );
+
+
+    if (
+      description === null
+    ) {
+
+      return;
+    }
+
+
+    /* -----------------------------------------------------
+       ORDER
+    ----------------------------------------------------- */
+
+    const order =
+      prompt(
+        "Order:",
+        data.order ?? 0
+      );
+
+
+    if (
+      order === null
+    ) {
+
+      return;
+    }
+
+
+    const orderNumber =
+      Number(
+        order
+      );
+
+
+    if (
+      !Number.isFinite(
+        orderNumber
+      ) ||
+      orderNumber < 0
+    ) {
+
+      return alert(
+        "Invalid task order."
+      );
+    }
+
+
+    /* -----------------------------------------------------
+       REWARD
+    ----------------------------------------------------- */
+
+    const existingReward =
+      Number(
+        data.reward
+      );
+
+
+    const reward =
+      prompt(
+        "Reward:",
+        Number.isFinite(
+          existingReward
+        )
+          ? existingReward
+          : ""
+      );
+
+
+    if (
+      reward === null
+    ) {
+
+      return;
+    }
+
+
+    const rewardNumber =
+      Number(
+        reward
+      );
+
+
+    if (
+      !isValidAdminTaskReward(
+        rewardNumber
+      )
+    ) {
+
+      return alert(
+        "Reward must be greater than 0."
+      );
+    }
+
+
+    /* -----------------------------------------------------
+       UPDATE
+
+       IMPORTANT:
+       Do NOT modify active here.
+       Existing active state is preserved.
+    ----------------------------------------------------- */
+
+    await updateDoc(
+      ref,
+      {
+
+        title:
+          cleanTitle,
+
+        name:
+          cleanTitle,
+
+        description:
+          description.trim(),
+
+        message:
+          description.trim(),
+
+        order:
+          Math.floor(
+            orderNumber
+          ),
+
+        /*
+         * AUTHORITATIVE TASK REWARD
+         */
+        reward:
+          rewardNumber,
+
+        updatedAt:
+          serverTimestamp(),
+
+        updatedBy:
+          currentAdmin.uid
+
+      }
+    );
+
+
+    console.log(
+      "✅ TASK UPDATED:",
+      {
+        id,
+        reward:
+          rewardNumber
+      }
+    );
+
+
+    showMessage(
+      "adminTaskMessage",
+      "Task updated successfully.",
+      "success"
+    );
+
+
+    await loadAdminTasks();
+
+
+  } catch (error) {
+
+    console.error(
+      "❌ Edit task error:",
+      error
+    );
+
+
+    alert(
+      error?.message ||
+      "Failed to edit task."
+    );
+
+  }
+};
 
 
 /* =========================================================
    TOGGLE TASK
+
+   IMPORTANT:
+   Toggle changes ONLY active status.
+   Reward is preserved.
 ========================================================= */
 
 window.toggleAdminTask =
-  async function (
-    id,
-    active
-  ) {
+async function (
+  id,
+  active
+) {
 
-    try {
+  if (!currentAdmin?.uid) {
 
-      await updateDoc(
-        doc(
-          db,
-          "tasks",
-          id
-        ),
-        {
-          active:
-            !active,
+    return alert(
+      "Admin session not found."
+    );
+  }
 
-          updatedAt:
-            serverTimestamp(),
 
-          updatedBy:
-            currentAdmin.uid
-        }
+  if (!id) {
+
+    return alert(
+      "Invalid task ID."
+    );
+  }
+
+
+  try {
+
+    const ref =
+      doc(
+        db,
+        "tasks",
+        String(id)
       );
 
 
-      await loadAdminTasks();
-
-    } catch (error) {
-
-      console.error(
-        "Toggle task error:",
-        error
+    const snap =
+      await getDoc(
+        ref
       );
 
-      alert(
-        error?.message ||
-        "Failed to update task."
+
+    if (!snap.exists()) {
+
+      return alert(
+        "Task not found."
       );
     }
-  };
+
+
+    const data =
+      snap.data() || {};
+
+
+    /*
+     * Prevent activating an invalid-reward task.
+     */
+    if (
+      active === false
+    ) {
+
+      const reward =
+        Number(
+          data.reward
+        );
+
+
+      if (
+        !isValidAdminTaskReward(
+          reward
+        )
+      ) {
+
+        return alert(
+          "This task cannot be activated because its reward is invalid. Edit the task and set a reward greater than 0."
+        );
+      }
+    }
+
+
+    const newActive =
+      !Boolean(
+        active
+      );
+
+
+    await updateDoc(
+      ref,
+      {
+
+        active:
+          newActive,
+
+        updatedAt:
+          serverTimestamp(),
+
+        updatedBy:
+          currentAdmin.uid
+
+      }
+    );
+
+
+    console.log(
+      "🔄 TASK STATUS UPDATED:",
+      {
+        id,
+
+        oldActive:
+          active,
+
+        newActive
+      }
+    );
+
+
+    await loadAdminTasks();
+
+
+  } catch (error) {
+
+    console.error(
+      "❌ Toggle task error:",
+      error
+    );
+
+
+    alert(
+      error?.message ||
+      "Failed to update task."
+    );
+
+  }
+};
 
 
 /* =========================================================
@@ -7583,44 +8163,406 @@ window.toggleAdminTask =
 ========================================================= */
 
 window.deleteAdminTask =
-  async function (id) {
+async function (id) {
 
-    if (
-      !confirm(
-        "Delete this task?"
+  if (!currentAdmin?.uid) {
+
+    return alert(
+      "Admin session not found."
+    );
+  }
+
+
+  if (!id) {
+
+    return alert(
+      "Invalid task ID."
+    );
+  }
+
+
+  const confirmed =
+    confirm(
+      "Delete this task?"
+    );
+
+
+  if (!confirmed) {
+    return;
+  }
+
+
+  try {
+
+    await deleteDoc(
+      doc(
+        db,
+        "tasks",
+        String(id)
       )
-    ) {
-      return;
-    }
+    );
 
 
-    try {
+    console.log(
+      "🗑️ TASK DELETED:",
+      id
+    );
 
-      await deleteDoc(
-        doc(
+
+    showMessage(
+      "adminTaskMessage",
+      "Task deleted successfully.",
+      "success"
+    );
+
+
+    await loadAdminTasks();
+
+
+  } catch (error) {
+
+    console.error(
+      "❌ Delete task error:",
+      error
+    );
+
+
+    alert(
+      error?.message ||
+      "Failed to delete task."
+    );
+
+  }
+};
+
+
+/* =========================================================
+   DEBUG - CHECK ALL TASKS
+
+   Console:
+     checkCCUSAdminTasks()
+========================================================= */
+
+window.checkCCUSAdminTasks =
+async function () {
+
+  try {
+
+    const snapshot =
+      await getDocs(
+        collection(
           db,
-          "tasks",
-          id
+          "tasks"
         )
       );
 
 
-      await loadAdminTasks();
+    let total =
+      snapshot.size;
 
-    } catch (error) {
+
+    let active =
+      0;
+
+
+    let validReward =
+      0;
+
+
+    let invalidReward =
+      0;
+
+
+    const invalidTasks =
+      [];
+
+
+    const activeTasks =
+      [];
+
+
+    snapshot.forEach(
+      docSnap => {
+
+        const data =
+          docSnap.data() || {};
+
+
+        const isActive =
+          data.active !== false;
+
+
+        const reward =
+          Number(
+            data.reward
+          );
+
+
+        const valid =
+          isValidAdminTaskReward(
+            reward
+          );
+
+
+        if (isActive) {
+
+          active++;
+
+          activeTasks.push({
+            id:
+              docSnap.id,
+
+            title:
+              getAdminTaskTitle(
+                data
+              ),
+
+            reward,
+
+            validReward:
+              valid
+          });
+        }
+
+
+        if (valid) {
+
+          validReward++;
+
+        } else {
+
+          invalidReward++;
+
+
+          invalidTasks.push({
+
+            id:
+              docSnap.id,
+
+            title:
+              getAdminTaskTitle(
+                data
+              ),
+
+            reward:
+              data.reward
+
+          });
+
+        }
+
+      }
+    );
+
+
+    console.table(
+      activeTasks
+    );
+
+
+    console.table(
+      invalidTasks
+    );
+
+
+    console.log(
+      "========== CCUS TASK CHECK =========="
+    );
+
+
+    console.log(
+      "TOTAL TASKS:",
+      total
+    );
+
+
+    console.log(
+      "ACTIVE TASKS:",
+      active
+    );
+
+
+    console.log(
+      "VALID REWARD:",
+      validReward
+    );
+
+
+    console.log(
+      "INVALID REWARD:",
+      invalidReward
+    );
+
+
+    console.log(
+      "ACTIVE TASKS:",
+      activeTasks
+    );
+
+
+    console.log(
+      "INVALID TASKS:",
+      invalidTasks
+    );
+
+
+    return {
+
+      total,
+
+      active,
+
+      validReward,
+
+      invalidReward,
+
+      activeTasks,
+
+      invalidTasks
+
+    };
+
+
+  } catch (error) {
+
+    console.error(
+      "❌ Task check error:",
+      error
+    );
+
+
+    return null;
+  }
+};
+
+
+/* =========================================================
+   DEBUG - CHECK ONE TASK
+========================================================= */
+
+window.checkCCUSAdminTask =
+async function (taskId) {
+
+  if (!taskId) {
+
+    console.error(
+      "❌ Task ID is required."
+    );
+
+    return null;
+  }
+
+
+  try {
+
+    const ref =
+      doc(
+        db,
+        "tasks",
+        String(taskId)
+      );
+
+
+    const snap =
+      await getDoc(
+        ref
+      );
+
+
+    if (!snap.exists()) {
 
       console.error(
-        "Delete task error:",
-        error
+        "❌ Task not found:",
+        taskId
       );
 
-      alert(
-        error?.message ||
-        "Failed to delete task."
-      );
+      return null;
     }
-  };
 
+
+    const data =
+      snap.data() || {};
+
+
+    const result = {
+
+      id:
+        snap.id,
+
+      title:
+        getAdminTaskTitle(
+          data
+        ),
+
+      active:
+        data.active !== false,
+
+      reward:
+        Number(
+          data.reward
+        ),
+
+      validReward:
+        isValidAdminTaskReward(
+          data.reward
+        ),
+
+      order:
+        taskAdminSafeNumber(
+          data.order
+        )
+
+    };
+
+
+    console.log(
+      "========== CCUS TASK =========="
+    );
+
+
+    console.table(
+      result
+    );
+
+
+    return result;
+
+
+  } catch (error) {
+
+    console.error(
+      "❌ Check task error:",
+      error
+    );
+
+
+    return null;
+  }
+};
+
+
+/* =========================================================
+   REFRESH TASKS
+========================================================= */
+
+window.refreshAdminTasks =
+async function () {
+
+  await loadAdminTasks();
+
+};
+
+
+/* =========================================================
+   OPTIONAL INITIAL LOAD
+========================================================= */
+
+window.loadAdminTasks =
+loadAdminTasks;
+
+
+window.loadTaskSettings =
+loadTaskSettings;
 
 /* =========================================================
    ANNOUNCEMENTS
