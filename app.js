@@ -3046,1380 +3046,659 @@ function renderWithdrawHistory(records) {
 
 /* =========================================================
    CCUS - VIP SYSTEM
-   FINAL STABLE VERSION
+   CORRECTED COMPLETE VERSION
+
    PURCHASE + EXPIRY + MISSED PAYOUT RECOVERY
    ATOMIC ONE-TIME PAYOUT
 
-   IMPORTANT BUSINESS RULES
-   ---------------------------------------------------------
-
-   1. VIP PURCHASE
-      totalBalance ONLY decreases.
-      totalRecharge NEVER changes.
-
-   2. VIP EXPIRY
-      totalBalance += price + profit.
-      totalRecharge NEVER changes.
-
-   3. ONE-TIME PAYOUT
-      payoutCompleted === true
-      is the payout lock.
-
-   4. status === "completed"
-      DOES NOT mean payout was completed.
-
-   5. OLD MISSED PAYOUTS
-      Are recovered from vip_orders.
-
-   6. ACTIVE VIP
-      Is determined from vip_orders:
-        - payoutCompleted !== true
-        - status is not cancelled/rejected/refunded
-        - expiresAt > now
-
-   7. STALE USER VIP FIELDS
-      Never block a new purchase if there is
-      no real active unpaid VIP order.
-
-   8. VIP EXPIRY
-      User becomes:
-        vipLevel = "VIP 0"
-        vipLevelId = "0"
-        vipExpiresAt = null
-        lastVipOrderId = null
-
-   9. totalRecharge
-      IS NEVER MODIFIED BY THIS VIP SYSTEM.
-
+   RULES:
+   1. VIP purchase: totalBalance decreases.
+   2. VIP expiry: totalBalance increases by price + profit.
+   3. totalRecharge is NEVER modified.
+   4. payoutCompleted === true is the payout lock.
+   5. status === completed does NOT mean paid.
+   6. Recover all expired unpaid VIP orders.
+   7. Stale user VIP fields do not block purchase.
+   8. Never pay cancelled/rejected/refunded orders.
    ========================================================= */
 
 (() => {
+  "use strict";
 
-"use strict";
-
-/* =========================================================
-   WINDOW
-   ========================================================= */
-
-const W =
-  typeof window !== "undefined"
+  const W = typeof window !== "undefined"
     ? window
     : globalThis;
 
+  /* =======================================================
+     GLOBAL STATE
+     ======================================================= */
 
-/* =========================================================
-   GLOBAL STATE
-   ========================================================= */
-
-if (!W._ccusVIPState) {
-
-  W._ccusVIPState = {
-
+  W._ccusVIPState = W._ccusVIPState || {
     listeners: {},
-
     expiryPromise: null,
-
     expiryInterval: null,
-
     submitting: false,
-
     initialized: false,
-
     visibilityStarted: false
-
   };
 
-}
+  const state = W._ccusVIPState;
 
-const ccusVIPState =
-  W._ccusVIPState;
-
-
-/* =========================================================
-   FIREBASE DEPENDENCIES
-   ========================================================= */
-
-function ccusVIPGetFirebase() {
-
-  return {
-
-    db:
-      typeof db !== "undefined"
-        ? db
-        : W.db,
-
-    collection:
-      typeof collection !== "undefined"
-        ? collection
-        : W.collection,
-
-    doc:
-      typeof doc !== "undefined"
-        ? doc
-        : W.doc,
-
-    query:
-      typeof query !== "undefined"
-        ? query
-        : W.query,
-
-    where:
-      typeof where !== "undefined"
-        ? where
-        : W.where,
-
-    getDocs:
-      typeof getDocs !== "undefined"
-        ? getDocs
-        : W.getDocs,
-
-    runTransaction:
-      typeof runTransaction !== "undefined"
-        ? runTransaction
-        : W.runTransaction,
-
-    onSnapshot:
-      typeof onSnapshot !== "undefined"
-        ? onSnapshot
-        : W.onSnapshot,
-
-    serverTimestamp:
-      typeof serverTimestamp !== "undefined"
-        ? serverTimestamp
-        : W.serverTimestamp
-
-  };
-
-}
-
-
-/* =========================================================
-   REQUIRE FIREBASE
-   ========================================================= */
-
-function ccusVIPRequireFirebase() {
-
-  const api =
-    ccusVIPGetFirebase();
-
-  const required = [
-    "db",
-    "collection",
-    "doc",
-    "query",
-    "where",
-    "getDocs",
-    "runTransaction",
-    "onSnapshot"
-  ];
-
-  const missing = [];
-
-  for (const key of required) {
-
-    if (key === "db") {
-
-      if (!api.db) {
-        missing.push(key);
-      }
-
-    } else {
-
-      if (
-        typeof api[key] !== "function"
-      ) {
-
-        missing.push(key);
-
-      }
-
-    }
-
-  }
-
-  if (missing.length) {
-
-    throw new Error(
-      "CCUS VIP Firebase dependencies missing: " +
-      missing.join(", ")
-    );
-
-  }
-
-  return api;
-
-}
-
-
-/* =========================================================
-   CURRENT USER
-   ========================================================= */
-
-function ccusVIPGetCurrentUser() {
-
-  try {
-
-    if (
-      typeof currentUser !== "undefined"
-    ) {
-
-      return currentUser || null;
-
-    }
-
-  } catch (error) {}
-
-  return W.currentUser || null;
-
-}
-
-
-/* =========================================================
-   CURRENT USER DATA
-   ========================================================= */
-
-function ccusVIPGetCurrentUserData() {
-
-  try {
-
-    if (
-      typeof currentUserData !== "undefined"
-    ) {
-
-      return currentUserData || {};
-
-    }
-
-  } catch (error) {}
-
-  return W.currentUserData || {};
-
-}
-
-
-/* =========================================================
-   REFRESH USER UI
-   ========================================================= */
-
-async function ccusVIPRefreshUserUI() {
-
-  try {
-
-    if (
-      typeof loadUserData === "function"
-    ) {
-
-      await loadUserData();
-
-    }
-
-  } catch (error) {
-
-    console.warn(
-      "CCUS VIP loadUserData refresh failed:",
-      error
-    );
-
-  }
-
-  try {
-
-    if (
-      typeof updateUserUI === "function"
-    ) {
-
-      await updateUserUI();
-
-    }
-
-  } catch (error) {
-
-    console.warn(
-      "CCUS VIP updateUserUI refresh failed:",
-      error
-    );
-
-  }
-
-}
-
-
-/* =========================================================
-   HTML ESCAPE
-   ========================================================= */
-
-function ccusVIPEscapeHtml(value) {
-
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-
-}
-
-
-/* =========================================================
-   MONEY
-   ========================================================= */
-
-function ccusVIPMoney(value) {
-
-  const number =
-    Number(value);
-
-  if (
-    !Number.isFinite(number)
-  ) {
-
-    return "0.00";
-
-  }
-
-  return number.toLocaleString(
-    "en-US",
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }
-  );
-
-}
-
-
-/* =========================================================
-   SERVER TIMESTAMP
-   ========================================================= */
-
-function ccusVIPServerTime() {
-
-  const api =
-    ccusVIPGetFirebase();
-
-  if (
-    typeof api.serverTimestamp === "function"
-  ) {
-
-    return api.serverTimestamp();
-
-  }
-
-  return new Date();
-
-}
-
-
-/* =========================================================
-   DATE PARSER
-   ========================================================= */
-
-function ccusVIPDateValue(value) {
-
-  if (!value) {
-    return 0;
-  }
-
-  try {
-
-    if (
-      typeof value.toMillis === "function"
-    ) {
-
-      const result =
-        value.toMillis();
-
-      return Number.isFinite(result)
-        ? result
-        : 0;
-
-    }
-
-    if (
-      typeof value.toDate === "function"
-    ) {
-
-      const result =
-        value.toDate().getTime();
-
-      return Number.isFinite(result)
-        ? result
-        : 0;
-
-    }
-
-    if (
-      value instanceof Date
-    ) {
-
-      return value.getTime();
-
-    }
-
-    if (
-      typeof value === "number"
-    ) {
-
-      return Number.isFinite(value)
-        ? value
-        : 0;
-
-    }
-
-    if (
-      typeof value === "string"
-    ) {
-
-      const result =
-        new Date(value).getTime();
-
-      return Number.isFinite(result)
-        ? result
-        : 0;
-
-    }
-
-    if (
-      typeof value === "object" &&
-      typeof value.seconds === "number"
-    ) {
-
-      return (
-        value.seconds * 1000 +
-        Math.floor(
-          Number(value.nanoseconds || 0) /
-          1000000
-        )
-      );
-
-    }
-
-  } catch (error) {
-
-    console.warn(
-      "CCUS VIP date conversion failed:",
-      error
-    );
-
-  }
-
-  return 0;
-
-}
-
-
-/* =========================================================
-   NORMALIZE VIP LEVEL
-   ========================================================= */
-
-function ccusVIPNormalizeLevel(
-  id,
-  data = {}
-) {
-
-  const price =
-    Number(
-      data.price ??
-      data.amount ??
-      data.requiredDeposit ??
-      0
-    );
-
-  const profit =
-    Number(
-      data.profit ??
-      data.reward ??
-      data.returnProfit ??
-      0
-    );
-
-  const validDays =
-    Number(
-      data.validDays ??
-      data.durationDays ??
-      data.days ??
-      0
-    );
-
-  const order =
-    Number(
-      data.order ??
-      data.displayOrder ??
-      data.level ??
-      9999
-    );
-
-  const name =
-    data.displayName ||
-    data.name ||
-    (
-      data.level !== undefined
-        ? `VIP ${data.level}`
-        : "VIP"
-    );
-
-  return {
-
-    id:
-      String(
-        id ||
-        data.id ||
-        ""
-      ),
-
-    name:
-      String(name),
-
-    displayName:
-      String(name),
-
-    price,
-
-    profit,
-
-    validDays,
-
-    order,
-
-    active:
-      data.active !== false
-
-  };
-
-}
-
-
-/* =========================================================
-   VIP LEVEL CACHE
-   ========================================================= */
-
-let ccusVIPLevelsList =
-  Array.isArray(W.vipLevelsList)
+  let vipLevels = Array.isArray(W.vipLevelsList)
     ? W.vipLevelsList
     : [];
 
+  let incomeLevels = [];
 
-/* =========================================================
-   STOP LISTENER
-   ========================================================= */
+  /* =======================================================
+     FIREBASE
+     ======================================================= */
 
-function ccusVIPStopListener(name) {
+  function getFirebase() {
+    return {
+      db: typeof db !== "undefined" ? db : W.db,
+      collection: typeof collection !== "undefined" ? collection : W.collection,
+      doc: typeof doc !== "undefined" ? doc : W.doc,
+      query: typeof query !== "undefined" ? query : W.query,
+      where: typeof where !== "undefined" ? where : W.where,
+      getDocs: typeof getDocs !== "undefined" ? getDocs : W.getDocs,
+      runTransaction: typeof runTransaction !== "undefined" ? runTransaction : W.runTransaction,
+      onSnapshot: typeof onSnapshot !== "undefined" ? onSnapshot : W.onSnapshot,
+      serverTimestamp: typeof serverTimestamp !== "undefined" ? serverTimestamp : W.serverTimestamp
+    };
+  }
 
-  try {
+  function requireFirebase() {
+    const api = getFirebase();
 
-    const unsubscribe =
-      ccusVIPState.listeners[name];
+    const required = [
+      "db",
+      "collection",
+      "doc",
+      "query",
+      "where",
+      "getDocs",
+      "runTransaction",
+      "onSnapshot"
+    ];
 
-    if (
-      typeof unsubscribe === "function"
-    ) {
+    const missing = required.filter(key => {
+      if (key === "db") return !api.db;
+      return typeof api[key] !== "function";
+    });
 
-      unsubscribe();
-
+    if (missing.length) {
+      throw new Error(
+        "CCUS VIP Firebase dependencies missing: " +
+        missing.join(", ")
+      );
     }
 
-  } catch (error) {
-
-    console.warn(
-      "CCUS VIP listener stop error:",
-      error
-    );
-
+    return api;
   }
 
-  delete ccusVIPState.listeners[name];
+  function serverTime() {
+    const api = getFirebase();
 
-  if (W.unsubs) {
+    return typeof api.serverTimestamp === "function"
+      ? api.serverTimestamp()
+      : new Date();
+  }
 
+  /* =======================================================
+     CURRENT USER
+     ======================================================= */
+
+  function getCurrentUser() {
     try {
-
-      if (
-        typeof W.unsubs[name] === "function"
-      ) {
-
-        W.unsubs[name]();
-
+      if (typeof currentUser !== "undefined") {
+        return currentUser || null;
       }
-
     } catch (error) {}
 
-    delete W.unsubs[name];
-
+    return W.currentUser || null;
   }
 
-}
+  function getCurrentUserData() {
+    try {
+      if (typeof currentUserData !== "undefined") {
+        return currentUserData || {};
+      }
+    } catch (error) {}
 
+    return W.currentUserData || {};
+  }
 
-/* =========================================================
-   LOAD VIP LEVELS
-   ========================================================= */
+  /* =======================================================
+     HELPERS
+     ======================================================= */
 
-function ccusVIPLoadLevels() {
+  function money(value) {
+    const number = Number(value);
 
-  const api =
-    ccusVIPRequireFirebase();
+    if (!Number.isFinite(number)) return "0.00";
 
-  const container =
-    document.querySelector(
+    return number.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function dateValue(value) {
+    if (!value) return 0;
+
+    try {
+      if (typeof value.toMillis === "function") {
+        const result = value.toMillis();
+        return Number.isFinite(result) ? result : 0;
+      }
+
+      if (typeof value.toDate === "function") {
+        const result = value.toDate().getTime();
+        return Number.isFinite(result) ? result : 0;
+      }
+
+      if (value instanceof Date) {
+        return value.getTime();
+      }
+
+      if (typeof value === "number") {
+        return Number.isFinite(value) ? value : 0;
+      }
+
+      if (typeof value === "string") {
+        const result = new Date(value).getTime();
+        return Number.isFinite(result) ? result : 0;
+      }
+
+      if (
+        typeof value === "object" &&
+        typeof value.seconds === "number"
+      ) {
+        return (
+          value.seconds * 1000 +
+          Math.floor(Number(value.nanoseconds || 0) / 1000000)
+        );
+      }
+    } catch (error) {
+      console.warn("VIP date conversion error:", error);
+    }
+
+    return 0;
+  }
+
+  async function refreshUserUI() {
+    try {
+      if (typeof loadUserData === "function") {
+        await loadUserData();
+      }
+    } catch (error) {
+      console.warn("VIP user data refresh error:", error);
+    }
+
+    try {
+      if (typeof updateUserUI === "function") {
+        await updateUserUI();
+      }
+    } catch (error) {
+      console.warn("VIP UI refresh error:", error);
+    }
+  }
+
+  function showMessage(message) {
+    if (typeof W.showToast === "function") {
+      W.showToast(message);
+    } else {
+      alert(message);
+    }
+  }
+
+  /* =======================================================
+     VIP LEVEL NORMALIZATION
+     ======================================================= */
+
+  function normalizeVIPLevel(id, data = {}) {
+    return {
+      id: String(id || data.id || ""),
+      name: String(
+        data.displayName ||
+        data.name ||
+        (data.level !== undefined ? `VIP ${data.level}` : "VIP")
+      ),
+      price: Number(
+        data.price ??
+        data.amount ??
+        data.requiredDeposit ??
+        0
+      ),
+      profit: Number(
+        data.profit ??
+        data.reward ??
+        data.returnProfit ??
+        0
+      ),
+      validDays: Number(
+        data.validDays ??
+        data.durationDays ??
+        data.days ??
+        0
+      ),
+      order: Number(
+        data.order ??
+        data.displayOrder ??
+        data.level ??
+        9999
+      ),
+      active: data.active !== false
+    };
+  }
+
+  /* =======================================================
+     LISTENER MANAGEMENT
+     ======================================================= */
+
+  function stopListener(name) {
+    try {
+      if (typeof state.listeners[name] === "function") {
+        state.listeners[name]();
+      }
+    } catch (error) {
+      console.warn("VIP listener stop error:", error);
+    }
+
+    delete state.listeners[name];
+
+    if (W.unsubs && typeof W.unsubs[name] === "function") {
+      try {
+        W.unsubs[name]();
+      } catch (error) {}
+
+      delete W.unsubs[name];
+    }
+  }
+
+  /* =======================================================
+     LOAD VIP LEVELS
+     ======================================================= */
+
+  function loadVIPLevels() {
+    const api = requireFirebase();
+
+    const container = document.querySelector(
       "#vipContainer, .vip-container"
     );
 
-  if (!container) {
+    if (!container) {
+      console.warn("VIP container not found.");
+      return;
+    }
 
-    console.warn(
-      "CCUS VIP: VIP container not found."
-    );
+    stopListener("vipLevels");
 
-    return;
+    container.innerHTML = `
+      <div style="text-align:center;padding:25px;color:#777">
+        Loading VIP packages...
+      </div>
+    `;
 
-  }
+    const unsubscribe = api.onSnapshot(
+      api.collection(api.db, "vip_levels"),
 
-  ccusVIPStopListener(
-    "vipLevels"
-  );
+      snapshot => {
+        const levels = [];
 
-  container.innerHTML = `
-    <div
-      style="
-        text-align:center;
-        padding:25px;
-        color:#777;
-      "
-    >
-      Loading VIP Levels...
-    </div>
-  `;
-
-  try {
-
-    const unsubscribe =
-      api.onSnapshot(
-
-        api.collection(
-          api.db,
-          "vip_levels"
-        ),
-
-        snapshot => {
-
-          const levels = [];
-
-          snapshot.forEach(
-            docSnap => {
-
-              const level =
-                ccusVIPNormalizeLevel(
-                  docSnap.id,
-                  docSnap.data() || {}
-                );
-
-              if (
-                level.active &&
-                level.price > 0 &&
-                level.validDays > 0 &&
-                level.profit >= 0
-              ) {
-
-                levels.push(level);
-
-              }
-
-            }
+        snapshot.forEach(docSnap => {
+          const level = normalizeVIPLevel(
+            docSnap.id,
+            docSnap.data() || {}
           );
 
-          levels.sort(
-            (a, b) => {
+          if (
+            level.active &&
+            Number.isFinite(level.price) &&
+            level.price > 0 &&
+            Number.isFinite(level.profit) &&
+            level.profit >= 0 &&
+            Number.isFinite(level.validDays) &&
+            level.validDays > 0
+          ) {
+            levels.push(level);
+          }
+        });
 
-              if (
-                a.order !== b.order
-              ) {
+        levels.sort((a, b) => {
+          if (a.order !== b.order) {
+            return a.order - b.order;
+          }
 
-                return (
-                  a.order -
-                  b.order
-                );
+          return a.price - b.price;
+        });
 
-              }
+        vipLevels = levels;
+        W.vipLevelsList = levels;
 
-              return (
-                a.price -
-                b.price
-              );
+        renderVIPLevels(levels);
+      },
 
-            }
-          );
+      error => {
+        console.error("VIP levels loading error:", error);
 
-          ccusVIPLevelsList =
-            levels;
-
-          W.vipLevelsList =
-            levels;
-
-          ccusVIPRenderLevels(
-            levels
-          );
-
-        },
-
-        error => {
-
-          console.error(
-            "❌ CCUS VIP levels error:",
-            error
-          );
-
-          container.innerHTML = `
-            <div
-              style="
-                text-align:center;
-                padding:25px;
-              "
-            >
-              <h3>
-                Unable to Load VIP Levels
-              </h3>
-
-              <p style="color:#777;">
-                Please try again later.
-              </p>
-            </div>
-          `;
-
-        }
-
-      );
-
-    ccusVIPState.listeners.vipLevels =
-      unsubscribe;
-
-    W.unsubs =
-      W.unsubs || {};
-
-    W.unsubs.vipLevels =
-      unsubscribe;
-
-  } catch (error) {
-
-    console.error(
-      "❌ VIP listener initialization error:",
-      error
+        container.innerHTML = `
+          <div style="text-align:center;padding:25px">
+            <h3>Unable to Load VIP Packages</h3>
+            <p>Please try again later.</p>
+          </div>
+        `;
+      }
     );
 
+    state.listeners.vipLevels = unsubscribe;
+
+    W.unsubs = W.unsubs || {};
+    W.unsubs.vipLevels = unsubscribe;
   }
 
-}
+  /* =======================================================
+     CALCULATE EXPIRY
+     ======================================================= */
 
+  function calculateExpiry(orderData) {
+    if (!orderData) return null;
 
-/* =========================================================
-   CALCULATE ORDER EXPIRY
-   ========================================================= */
+    const directExpiry = dateValue(orderData.expiresAt);
 
-function ccusVIPCalculateExpiry(orderData) {
+    if (directExpiry > 0) {
+      return new Date(directExpiry);
+    }
 
-  if (!orderData) {
-    return null;
-  }
+    const started = dateValue(orderData.startedAt);
 
-  const directExpiry =
-    ccusVIPDateValue(
-      orderData.expiresAt
-    );
-
-  if (
-    directExpiry > 0
-  ) {
-
-    return new Date(
-      directExpiry
-    );
-
-  }
-
-  const started =
-    ccusVIPDateValue(
-      orderData.startedAt
-    );
-
-  const validDays =
-    Number(
+    const validDays = Number(
       orderData.validDays ??
       orderData.durationDays ??
       orderData.days ??
       0
     );
 
-  if (
-    started <= 0 ||
-    !Number.isFinite(validDays) ||
-    validDays <= 0
-  ) {
+    if (
+      started <= 0 ||
+      !Number.isFinite(validDays) ||
+      validDays <= 0
+    ) {
+      return null;
+    }
 
-    return null;
-
+    return new Date(
+      started + validDays * 24 * 60 * 60 * 1000
+    );
   }
 
-  return new Date(
-    started +
-    validDays *
-    24 *
-    60 *
-    60 *
-    1000
-  );
-
-}
-
-
-/* =========================================================
-   NON-PAYABLE STATUSES
-   ========================================================= */
-
-function ccusVIPIsNonPayableStatus(status) {
-
-  const value =
-    String(status || "")
+  function isNonPayableStatus(status) {
+    const value = String(status || "")
       .trim()
       .toLowerCase();
 
-  return [
-    "cancelled",
-    "canceled",
-    "rejected",
-    "refunded"
-  ].includes(value);
-
-}
-
-
-/* =========================================================
-   ACTIVE UNPAID ORDER
-   IMPORTANT:
-   DO NOT depend on status === "active"
-   ========================================================= */
-
-function ccusVIPIsActiveUnpaidOrder(
-  orderData,
-  now = Date.now()
-) {
-
-  if (!orderData) {
-    return false;
+    return [
+      "cancelled",
+      "canceled",
+      "rejected",
+      "refunded"
+    ].includes(value);
   }
 
-  if (
-    orderData.payoutCompleted === true
-  ) {
+  /* =======================================================
+     ACTIVE UNPAID ORDER
 
-    return false;
+     status === active is NOT required.
 
-  }
+     The order is active when:
+       1. payoutCompleted !== true
+       2. not cancelled/rejected/refunded
+       3. expiry is in the future
+     ======================================================= */
 
-  if (
-    ccusVIPIsNonPayableStatus(
-      orderData.status
-    )
-  ) {
+  function isActiveUnpaidOrder(orderData, now = Date.now()) {
+    if (!orderData) return false;
 
-    return false;
-
-  }
-
-  const expiry =
-    ccusVIPCalculateExpiry(
-      orderData
-    );
-
-  if (!expiry) {
-    return false;
-  }
-
-  return (
-    expiry.getTime() > now
-  );
-
-}
-
-
-/* =========================================================
-   FIND ALL USER VIP ORDERS
-   NO STATUS FILTER
-   ========================================================= */
-
-async function ccusVIPFindUserOrders(
-  userId
-) {
-
-  const api =
-    ccusVIPRequireFirebase();
-
-  const q =
-    api.query(
-      api.collection(
-        api.db,
-        "vip_orders"
-      ),
-      api.where(
-        "userId",
-        "==",
-        String(userId)
-      )
-    );
-
-  const snapshot =
-    await api.getDocs(q);
-
-  return snapshot.docs.map(
-    snap => ({
-
-      id:
-        snap.id,
-
-      ref:
-        snap.ref,
-
-      data:
-        snap.data() || {}
-
-    })
-  );
-
-}
-
-
-/* =========================================================
-   FIND REAL CURRENT ACTIVE ORDER
-   ========================================================= */
-
-async function ccusVIPFindCurrentOrder(
-  userId
-) {
-
-  const orders =
-    await ccusVIPFindUserOrders(
-      userId
-    );
-
-  const now =
-    Date.now();
-
-  const active =
-    orders.filter(
-      item =>
-        ccusVIPIsActiveUnpaidOrder(
-          item.data,
-          now
-        )
-    );
-
-  if (!active.length) {
-    return null;
-  }
-
-  active.sort(
-    (a, b) => {
-
-      const aTime =
-        ccusVIPDateValue(
-          a.data.startedAt ||
-          a.data.createdAt
-        );
-
-      const bTime =
-        ccusVIPDateValue(
-          b.data.startedAt ||
-          b.data.createdAt
-        );
-
-      return (
-        bTime -
-        aTime
-      );
-
+    if (orderData.payoutCompleted === true) {
+      return false;
     }
-  );
 
-  return active[0];
+    if (isNonPayableStatus(orderData.status)) {
+      return false;
+    }
 
-}
+    const expiry = calculateExpiry(orderData);
 
-
-/* =========================================================
-   REPAIR STALE USER VIP STATE
-
-   IMPORTANT:
-   This does NOT change balance.
-
-   It only clears old:
-     vipLevel
-     vipLevelId
-     vipExpiresAt
-     lastVipOrderId
-
-   when there is no real active unpaid VIP.
-   ========================================================= */
-
-async function ccusVIPRepairStaleUserState(
-  userId
-) {
-
-  const api =
-    ccusVIPRequireFirebase();
-
-  const orders =
-    await ccusVIPFindUserOrders(
-      userId
-    );
-
-  const activeOrder =
-    orders.find(
-      item =>
-        ccusVIPIsActiveUnpaidOrder(
-          item.data,
-          Date.now()
-        )
-    );
-
-  if (activeOrder) {
-
-    return {
-
-      repaired:
-        false,
-
-      reason:
-        "real-active-vip-exists",
-
-      orderId:
-        activeOrder.id
-
-    };
-
+    return !!expiry && expiry.getTime() > now;
   }
 
-  const userRef =
-    api.doc(
+  /* =======================================================
+     FIND ALL USER ORDERS
+     ======================================================= */
+
+  async function findUserOrders(userId) {
+    const api = requireFirebase();
+
+    const q = api.query(
+      api.collection(api.db, "vip_orders"),
+      api.where("userId", "==", String(userId))
+    );
+
+    const snapshot = await api.getDocs(q);
+
+    return snapshot.docs.map(snap => ({
+      id: snap.id,
+      ref: snap.ref,
+      data: snap.data() || {}
+    }));
+  }
+
+  /* =======================================================
+     FIND CURRENT ACTIVE ORDER
+     ======================================================= */
+
+  async function findCurrentOrder(userId) {
+    const orders = await findUserOrders(userId);
+
+    const active = orders.filter(item =>
+      isActiveUnpaidOrder(item.data, Date.now())
+    );
+
+    active.sort((a, b) => {
+      return (
+        dateValue(b.data.startedAt || b.data.createdAt) -
+        dateValue(a.data.startedAt || a.data.createdAt)
+      );
+    });
+
+    return active[0] || null;
+  }
+
+  /* =======================================================
+     REPAIR STALE USER VIP FIELDS
+
+     Does not modify totalBalance or totalRecharge.
+     ======================================================= */
+
+  async function repairStaleUserState(userId) {
+    const api = requireFirebase();
+
+    const orders = await findUserOrders(userId);
+
+    const activeOrder = orders.find(item =>
+      isActiveUnpaidOrder(item.data, Date.now())
+    );
+
+    if (activeOrder) {
+      return {
+        repaired: false,
+        reason: "real-active-vip-exists",
+        orderId: activeOrder.id
+      };
+    }
+
+    const userRef = api.doc(
       api.db,
       "users",
       String(userId)
     );
 
-  const result =
-    await api.runTransaction(
+    return await api.runTransaction(
       api.db,
       async transaction => {
-
-        const userSnap =
-          await transaction.get(
-            userRef
-          );
+        const userSnap = await transaction.get(userRef);
 
         if (!userSnap.exists()) {
-
           return {
-
-            repaired:
-              false,
-
-            reason:
-              "user-not-found"
-
+            repaired: false,
+            reason: "user-not-found"
           };
-
         }
 
-        const data =
-          userSnap.data() || {};
-
-        const vipLevel =
-          String(
-            data.vipLevel ||
-            "VIP 0"
-          );
-
-        const vipLevelId =
-          String(
-            data.vipLevelId ||
-            "0"
-          );
-
-        const lastOrder =
-          String(
-            data.lastVipOrderId ||
-            ""
-          );
-
-        const expiry =
-          ccusVIPDateValue(
-            data.vipExpiresAt
-          );
+        const data = userSnap.data() || {};
 
         const hasStaleState =
-          (
-            vipLevel !== "VIP 0" ||
-            vipLevelId !== "0" ||
-            lastOrder !== "" ||
-            expiry > 0
-          );
+          String(data.vipLevel || "VIP 0") !== "VIP 0" ||
+          String(data.vipLevelId || "0") !== "0" ||
+          !!data.lastVipOrderId ||
+          dateValue(data.vipExpiresAt) > 0;
 
         if (!hasStaleState) {
-
           return {
-
-            repaired:
-              false,
-
-            reason:
-              "already-clean"
-
+            repaired: false,
+            reason: "already-clean"
           };
-
         }
 
-        transaction.update(
-          userRef,
-          {
-
-            vipLevel:
-              "VIP 0",
-
-            vipLevelId:
-              "0",
-
-            vipExpiresAt:
-              null,
-
-            lastVipOrderId:
-              null,
-
-            vipUpdatedAt:
-              ccusVIPServerTime(),
-
-            updatedAt:
-              ccusVIPServerTime()
-
-          }
-        );
+        transaction.update(userRef, {
+          vipLevel: "VIP 0",
+          vipLevelId: "0",
+          vipExpiresAt: null,
+          lastVipOrderId: null,
+          vipUpdatedAt: serverTime(),
+          updatedAt: serverTime()
+        });
 
         return {
-
-          repaired:
-            true,
-
-          reason:
-            "stale-vip-state-cleared"
-
+          repaired: true,
+          reason: "stale-vip-state-cleared"
         };
-
       }
     );
-
-  return result;
-
-}
-
-
-/* =========================================================
-   COMPLETE EXPIRED VIP
-   ========================================================= */
-
-async function ccusVIPCompleteExpired(
-  orderId
-) {
-
-  const api =
-    ccusVIPRequireFirebase();
-
-  if (!orderId) {
-
-    return {
-
-      success:
-        false,
-
-      reason:
-        "missing-order-id"
-
-    };
-
   }
 
-  const orderRef =
-    api.doc(
+  /* =======================================================
+     COMPLETE EXPIRED VIP
+
+     ATOMIC:
+       - reads order
+       - reads user
+       - calculates payout
+       - increases totalBalance
+       - locks payoutCompleted = true
+
+     totalRecharge is not touched.
+     ======================================================= */
+
+  async function completeExpiredVIP(orderId) {
+    const api = requireFirebase();
+
+    if (!orderId) {
+      return {
+        success: false,
+        reason: "missing-order-id"
+      };
+    }
+
+    const orderRef = api.doc(
       api.db,
       "vip_orders",
       String(orderId)
     );
 
-  const result =
-    await api.runTransaction(
+    return await api.runTransaction(
       api.db,
       async transaction => {
+        /* READ ORDER */
 
-        /* -----------------------------------------
-           READ ORDER FIRST
-           ----------------------------------------- */
-
-        const orderSnap =
-          await transaction.get(
-            orderRef
-          );
+        const orderSnap = await transaction.get(orderRef);
 
         if (!orderSnap.exists()) {
-
           return {
-
-            success:
-              false,
-
-            reason:
-              "order-not-found"
-
+            success: false,
+            reason: "order-not-found"
           };
-
         }
 
-        const orderData =
-          orderSnap.data() || {};
+        const orderData = orderSnap.data() || {};
 
+        /* ONE-TIME PAYOUT LOCK */
 
-        /* -----------------------------------------
-           ONE-TIME PAYOUT LOCK
-           ----------------------------------------- */
-
-        if (
-          orderData.payoutCompleted === true
-        ) {
-
+        if (orderData.payoutCompleted === true) {
           return {
-
-            success:
-              false,
-
-            alreadyCompleted:
-              true,
-
-            reason:
-              "already-paid",
-
-            orderId:
-              String(orderId)
-
+            success: false,
+            alreadyCompleted: true,
+            reason: "already-paid",
+            orderId: String(orderId)
           };
-
         }
 
+        /* NON-PAYABLE STATUS */
 
-        /* -----------------------------------------
-           USER ID
-           ----------------------------------------- */
+        const status = String(orderData.status || "active")
+          .trim()
+          .toLowerCase();
 
-        const userId =
-          String(
-            orderData.userId || ""
-          );
+        if (isNonPayableStatus(status)) {
+          return {
+            success: false,
+            reason: "non-payable-order-status",
+            status
+          };
+        }
+
+        const userId = String(orderData.userId || "");
 
         if (!userId) {
-
-          throw new Error(
-            "VIP order has no userId."
-          );
-
+          throw new Error("VIP order has no userId.");
         }
 
+        /* READ USER */
 
-        /* -----------------------------------------
-           READ USER
-           ----------------------------------------- */
+        const userRef = api.doc(
+          api.db,
+          "users",
+          userId
+        );
 
-        const userRef =
-          api.doc(
-            api.db,
-            "users",
-            userId
-          );
-
-        const userSnap =
-          await transaction.get(
-            userRef
-          );
+        const userSnap = await transaction.get(userRef);
 
         if (!userSnap.exists()) {
-
           return {
-
-            success:
-              false,
-
-            reason:
-              "user-not-found"
-
+            success: false,
+            reason: "user-not-found"
           };
-
         }
 
-        const userData =
-          userSnap.data() || {};
+        const userData = userSnap.data() || {};
 
+        /* HISTORICAL PACKAGE FALLBACK */
 
-        /* -----------------------------------------
-           STATUS
-           ----------------------------------------- */
+        const vipId = String(orderData.vipId || "");
 
-        const status =
-          String(
-            orderData.status ||
-            "active"
-          )
-            .trim()
-            .toLowerCase();
+        let fallbackVIPData = null;
 
-        if (
-          ccusVIPIsNonPayableStatus(
-            status
-          )
-        ) {
-
-          return {
-
-            success:
-              false,
-
-            reason:
-              "non-payable-order-status",
-
-            status
-
-          };
-
-        }
-
-
-        /* -----------------------------------------
-           ORDER EXPIRY
-           ----------------------------------------- */
-
-        let expiresAt =
-          ccusVIPCalculateExpiry(
-            orderData
-          );
-
-
-        /* -----------------------------------------
-           HISTORICAL VIP PACKAGE FALLBACK
-           ----------------------------------------- */
-
-        let fallbackVIPData =
-          null;
-
-        const vipId =
-          String(
-            orderData.vipId ||
-            ""
-          );
-
-        let needPackage =
-          !expiresAt;
-
+        let expiry = calculateExpiry(orderData);
 
         let rawPrice =
           orderData.price ??
@@ -4432,1825 +3711,1055 @@ async function ccusVIPCompleteExpired(
           orderData.returnProfit ??
           null;
 
+        let rawDays =
+          orderData.validDays ??
+          orderData.durationDays ??
+          orderData.days ??
+          null;
 
-        if (
+        const priceMissing =
           rawPrice === null ||
           rawPrice === undefined ||
-          Number(rawPrice) <= 0
-        ) {
+          !Number.isFinite(Number(rawPrice)) ||
+          Number(rawPrice) <= 0;
 
-          needPackage = true;
-
-        }
-
-        if (
+        const profitMissing =
           rawProfit === null ||
-          rawProfit === undefined
-        ) {
+          rawProfit === undefined ||
+          !Number.isFinite(Number(rawProfit)) ||
+          Number(rawProfit) < 0;
 
-          needPackage = true;
-
-        }
-
-
-        /* -----------------------------------------
-           READ PACKAGE ONLY WHEN NECESSARY
-           ----------------------------------------- */
+        const daysMissing =
+          rawDays === null ||
+          rawDays === undefined ||
+          !Number.isFinite(Number(rawDays)) ||
+          Number(rawDays) <= 0;
 
         if (
-          needPackage &&
+          (!expiry || priceMissing || profitMissing || daysMissing) &&
           vipId
         ) {
+          const vipRef = api.doc(
+            api.db,
+            "vip_levels",
+            vipId
+          );
 
-          const vipRef =
-            api.doc(
-              api.db,
-              "vip_levels",
-              vipId
-            );
+          const vipSnap = await transaction.get(vipRef);
 
-          const vipSnap =
-            await transaction.get(
-              vipRef
-            );
-
-          if (
-            vipSnap.exists()
-          ) {
-
-            fallbackVIPData =
-              vipSnap.data() || {};
-
+          if (vipSnap.exists()) {
+            fallbackVIPData = vipSnap.data() || {};
           }
-
         }
 
+        /* REPAIR EXPIRY */
 
-        /* -----------------------------------------
-           RECOVER EXPIRY
-           ----------------------------------------- */
+        if (!expiry) {
+          const started = dateValue(orderData.startedAt);
 
-        if (!expiresAt) {
-
-          const fallbackDays =
-            Number(
-              orderData.validDays ??
-              fallbackVIPData?.validDays ??
-              fallbackVIPData?.durationDays ??
-              fallbackVIPData?.days ??
-              0
-            );
-
-          const started =
-            ccusVIPDateValue(
-              orderData.startedAt
-            );
+          const fallbackDays = Number(
+            (
+              Number(rawDays) > 0
+                ? rawDays
+                : null
+            ) ??
+            fallbackVIPData?.validDays ??
+            fallbackVIPData?.durationDays ??
+            fallbackVIPData?.days ??
+            0
+          );
 
           if (
             started > 0 &&
-            Number.isFinite(
-              fallbackDays
-            ) &&
+            Number.isFinite(fallbackDays) &&
             fallbackDays > 0
           ) {
-
-            expiresAt =
-              new Date(
-                started +
-                fallbackDays *
-                24 *
-                60 *
-                60 *
-                1000
-              );
-
+            expiry = new Date(
+              started + fallbackDays * 24 * 60 * 60 * 1000
+            );
           }
-
         }
 
-
-        if (!expiresAt) {
-
+        if (!expiry) {
           throw new Error(
             "VIP expiry date is missing and could not be recovered."
           );
-
         }
 
+        /* NOT EXPIRED */
 
-        /* -----------------------------------------
-           NOT EXPIRED
-           ----------------------------------------- */
-
-        if (
-          expiresAt.getTime() >
-          Date.now()
-        ) {
-
+        if (expiry.getTime() > Date.now()) {
           return {
-
-            success:
-              false,
-
-            reason:
-              "not-expired",
-
-            orderId:
-              String(orderId),
-
-            expiresAt
-
+            success: false,
+            reason: "not-expired",
+            orderId: String(orderId),
+            expiresAt: expiry
           };
-
         }
 
+        /* PRICE */
 
-        /* -----------------------------------------
-           PRICE
-           ----------------------------------------- */
-
-        let price =
-          Number(
-            rawPrice ??
-            0
-          );
+        let price = Number(rawPrice);
 
         if (
           !Number.isFinite(price) ||
-          price < 0
+          price <= 0
         ) {
-
-          price = 0;
-
-        }
-
-
-        /* -----------------------------------------
-           PROFIT
-           ----------------------------------------- */
-
-        let profit =
-          Number(
-            rawProfit ??
+          price = Number(
+            fallbackVIPData?.price ??
+            fallbackVIPData?.amount ??
+            fallbackVIPData?.requiredDeposit ??
             0
           );
+        }
+
+        /* PROFIT */
+
+        let profit = Number(rawProfit);
 
         if (
           !Number.isFinite(profit) ||
           profit < 0
         ) {
-
-          profit = 0;
-
+          profit = Number(
+            fallbackVIPData?.profit ??
+            fallbackVIPData?.reward ??
+            fallbackVIPData?.returnProfit ??
+            0
+          );
         }
-
-
-        /* -----------------------------------------
-           HISTORICAL FALLBACK
-           ----------------------------------------- */
-
-        if (
-          price <= 0 &&
-          fallbackVIPData
-        ) {
-
-          const fallbackPrice =
-            Number(
-              fallbackVIPData.price ??
-              fallbackVIPData.amount ??
-              fallbackVIPData.requiredDeposit ??
-              0
-            );
-
-          if (
-            Number.isFinite(
-              fallbackPrice
-            ) &&
-            fallbackPrice > 0
-          ) {
-
-            price =
-              fallbackPrice;
-
-          }
-
-        }
-
-
-        if (
-          (
-            rawProfit === null ||
-            rawProfit === undefined
-          ) &&
-          fallbackVIPData
-        ) {
-
-          const fallbackProfit =
-            Number(
-              fallbackVIPData.profit ??
-              fallbackVIPData.reward ??
-              fallbackVIPData.returnProfit ??
-              0
-            );
-
-          if (
-            Number.isFinite(
-              fallbackProfit
-            ) &&
-            fallbackProfit >= 0
-          ) {
-
-            profit =
-              fallbackProfit;
-
-          }
-
-        }
-
-
-        /* -----------------------------------------
-           VALIDATION
-           ----------------------------------------- */
 
         if (
           !Number.isFinite(price) ||
-          price < 0
+          price <= 0
         ) {
-
           throw new Error(
-            "Invalid VIP price."
+            "Historical VIP price is missing or invalid."
           );
-
         }
 
         if (
           !Number.isFinite(profit) ||
           profit < 0
         ) {
-
           throw new Error(
-            "Invalid VIP profit."
+            "Historical VIP profit is missing or invalid."
           );
-
         }
 
-        const payout =
-          price +
-          profit;
+        const payout = price + profit;
 
         if (
           !Number.isFinite(payout) ||
           payout <= 0
         ) {
-
-          throw new Error(
-            "Invalid VIP payout amount."
-          );
-
+          throw new Error("Invalid VIP payout amount.");
         }
 
+        /* BALANCE */
 
-        /* -----------------------------------------
-           CURRENT BALANCE
-           ----------------------------------------- */
+        const oldBalance = Number(userData.totalBalance ?? 0);
 
-        const currentBalance =
-          Number(
-            userData.totalBalance ??
-            0
-          );
-
-        if (
-          !Number.isFinite(
-            currentBalance
-          )
-        ) {
-
-          throw new Error(
-            "Invalid user totalBalance."
-          );
-
+        if (!Number.isFinite(oldBalance)) {
+          throw new Error("Invalid user totalBalance.");
         }
 
-        const newBalance =
-          currentBalance +
-          payout;
-
-
-        /* -----------------------------------------
-           IS CURRENT ORDER?
-           ----------------------------------------- */
-
-        const lastVipOrderId =
-          String(
-            userData.lastVipOrderId ||
-            ""
-          );
+        const newBalance = oldBalance + payout;
 
         const isCurrentOrder =
-          lastVipOrderId ===
+          String(userData.lastVipOrderId || "") ===
           String(orderId);
 
-
-        /* -----------------------------------------
-           USER UPDATE
-           IMPORTANT:
-           totalRecharge NOT included.
-           ----------------------------------------- */
+        /* USER UPDATE */
 
         const userUpdate = {
+          totalBalance: newBalance,
 
-          totalBalance:
-            newBalance,
+          lastVipPayoutOrderId: String(orderId),
+          lastVipPayoutAmount: payout,
+          lastVipPayoutAt: serverTime(),
 
-          lastVipPayoutOrderId:
-            String(orderId),
-
-          lastVipPayoutAmount:
-            payout,
-
-          lastVipPayoutAt:
-            ccusVIPServerTime(),
-
-          vipUpdatedAt:
-            ccusVIPServerTime(),
-
-          updatedAt:
-            ccusVIPServerTime()
-
+          vipUpdatedAt: serverTime(),
+          updatedAt: serverTime()
         };
 
-
-        /* -----------------------------------------
-           RESET CURRENT VIP
-           ----------------------------------------- */
-
-        if (
-          isCurrentOrder
-        ) {
-
-          userUpdate.vipLevel =
-            "VIP 0";
-
-          userUpdate.vipLevelId =
-            "0";
-
-          userUpdate.vipExpiresAt =
-            null;
-
-          userUpdate.lastVipOrderId =
-            null;
-
+        if (isCurrentOrder) {
+          userUpdate.vipLevel = "VIP 0";
+          userUpdate.vipLevelId = "0";
+          userUpdate.vipExpiresAt = null;
+          userUpdate.lastVipOrderId = null;
         }
 
+        /* WRITE USER */
 
-        /* -----------------------------------------
-           WRITE USER
-           ----------------------------------------- */
+        transaction.update(userRef, userUpdate);
 
-        transaction.update(
-          userRef,
-          userUpdate
-        );
+        /* WRITE ORDER */
 
-
-        /* -----------------------------------------
-           WRITE ORDER
-           ----------------------------------------- */
-
-        transaction.update(
-          orderRef,
-          {
-
-            status:
-              "completed",
-
-            payoutCompleted:
-              true,
-
-            payoutAmount:
-              payout,
-
-            payoutCompletedAt:
-              ccusVIPServerTime(),
-
-            expiresAt:
-              expiresAt,
-
-            updatedAt:
-              ccusVIPServerTime()
-
-          }
-        );
-
-
-        /* -----------------------------------------
-           RETURN
-           ----------------------------------------- */
+        transaction.update(orderRef, {
+          status: "completed",
+          payoutCompleted: true,
+          payoutAmount: payout,
+          payoutCompletedAt: serverTime(),
+          expiresAt: expiry,
+          updatedAt: serverTime()
+        });
 
         return {
-
-          success:
-            true,
-
-          orderId:
-            String(orderId),
-
+          success: true,
+          orderId: String(orderId),
           price,
-
           profit,
-
           payout,
-
-          oldBalance:
-            currentBalance,
-
+          oldBalance,
           newBalance,
-
-          expiresAt
-
+          expiresAt: expiry
         };
-
       }
     );
-
-  return result;
-
-}
-
-
-/* =========================================================
-   PROCESS ALL EXPIRED VIPs
-   ========================================================= */
-
-async function ccusVIPProcessExpired() {
-
-  const user =
-    ccusVIPGetCurrentUser();
-
-  if (!user) {
-
-    return {
-
-      success:
-        false,
-
-      reason:
-        "not-logged-in"
-
-    };
-
   }
 
-  if (
-    ccusVIPState.expiryPromise
-  ) {
+  /* =======================================================
+     PROCESS ALL EXPIRED VIP ORDERS
 
-    return ccusVIPState.expiryPromise;
+     Recovers missed payouts even if order status is
+     already "completed", provided payoutCompleted is
+     not true.
+     ======================================================= */
 
-  }
+  async function processExpiredVIP() {
+    const user = getCurrentUser();
 
-  ccusVIPState.expiryPromise =
-    (async () => {
+    if (!user || !user.uid) {
+      return {
+        success: false,
+        reason: "not-logged-in"
+      };
+    }
 
+    if (state.expiryPromise) {
+      return state.expiryPromise;
+    }
+
+    state.expiryPromise = (async () => {
       try {
+        const userId = String(user.uid);
 
-        const userId =
-          String(user.uid);
+        let orders = await findUserOrders(userId);
 
-        let orders =
-          await ccusVIPFindUserOrders(
-            userId
+        const now = Date.now();
+
+        const expiredOrders = orders.filter(item => {
+          const data = item.data || {};
+
+          if (data.payoutCompleted === true) return false;
+          if (isNonPayableStatus(data.status)) return false;
+
+          const expiry = calculateExpiry(data);
+
+          return !!expiry && expiry.getTime() <= now;
+        });
+
+        expiredOrders.sort((a, b) => {
+          return (
+            dateValue(a.data.startedAt || a.data.createdAt) -
+            dateValue(b.data.startedAt || b.data.createdAt)
           );
-
-        if (!orders.length) {
-
-          await ccusVIPRepairStaleUserState(
-            userId
-          );
-
-          return {
-
-            success:
-              false,
-
-            reason:
-              "no-orders",
-
-            processed:
-              0,
-
-            paid:
-              0
-
-          };
-
-        }
-
-        const now =
-          Date.now();
-
-
-        /* -----------------------------------------
-           FIND EXPIRED UNPAID ORDERS
-           ----------------------------------------- */
-
-        const expiredOrders =
-          orders.filter(
-            item => {
-
-              const data =
-                item.data || {};
-
-              if (
-                data.payoutCompleted === true
-              ) {
-
-                return false;
-
-              }
-
-              if (
-                ccusVIPIsNonPayableStatus(
-                  data.status
-                )
-              ) {
-
-                return false;
-
-              }
-
-              const expiry =
-                ccusVIPCalculateExpiry(
-                  data
-                );
-
-              if (!expiry) {
-
-                return false;
-
-              }
-
-              return (
-                expiry.getTime() <=
-                now
-              );
-
-            }
-          );
-
-
-        /* -----------------------------------------
-           OLDEST FIRST
-           ----------------------------------------- */
-
-        expiredOrders.sort(
-          (a, b) => {
-
-            const aTime =
-              ccusVIPDateValue(
-                a.data.startedAt ||
-                a.data.createdAt
-              );
-
-            const bTime =
-              ccusVIPDateValue(
-                b.data.startedAt ||
-                b.data.createdAt
-              );
-
-            return (
-              aTime -
-              bTime
-            );
-
-          }
-        );
-
+        });
 
         const results = [];
 
-
-        /* -----------------------------------------
-           PAY EVERY MISSED VIP
-           ----------------------------------------- */
-
-        for (
-          const order of expiredOrders
-        ) {
-
+        for (const order of expiredOrders) {
           try {
+            const result = await completeExpiredVIP(order.id);
 
-            const result =
-              await ccusVIPCompleteExpired(
-                order.id
-              );
+            results.push(result);
 
-            results.push(
-              result
-            );
-
-            if (
-              result?.success
-            ) {
-
+            if (result?.success) {
               console.log(
-                "✅ CCUS VIP payout recovered:",
-                {
-                  orderId:
-                    result.orderId,
-
-                  price:
-                    result.price,
-
-                  profit:
-                    result.profit,
-
-                  payout:
-                    result.payout,
-
-                  oldBalance:
-                    result.oldBalance,
-
-                  newBalance:
-                    result.newBalance
-                }
+                "VIP payout recovered:",
+                result.orderId,
+                result.payout
               );
-
             }
-
           } catch (error) {
-
             console.error(
-              "❌ VIP payout failed:",
+              "VIP payout failed:",
               order.id,
               error
             );
 
             results.push({
-
-              success:
-                false,
-
-              orderId:
-                order.id,
-
-              reason:
-                "error",
-
+              success: false,
+              orderId: order.id,
+              reason: "error",
               error
-
             });
-
           }
-
         }
 
+        /* RE-READ AFTER PAYOUT */
 
-        /* -----------------------------------------
-           RE-READ ORDERS AFTER PAYOUT
-           ----------------------------------------- */
+        orders = await findUserOrders(userId);
 
-        orders =
-          await ccusVIPFindUserOrders(
-            userId
-          );
+        const activeOrder = orders.find(item =>
+          isActiveUnpaidOrder(item.data, Date.now())
+        );
 
+        /* REPAIR OLD USER VIP FIELDS */
 
-        /* -----------------------------------------
-           CHECK REAL ACTIVE VIP
-           ----------------------------------------- */
-
-        const activeOrder =
-          orders.find(
-            item =>
-              ccusVIPIsActiveUnpaidOrder(
-                item.data,
-                Date.now()
-              )
-          );
-
-
-        /* -----------------------------------------
-           REPAIR STALE USER STATE
-           ----------------------------------------- */
-
-        let repaired =
-          false;
+        let repaired = false;
 
         if (!activeOrder) {
-
-          const repair =
-            await ccusVIPRepairStaleUserState(
-              userId
-            );
-
-          repaired =
-            repair?.repaired === true;
-
+          const repair = await repairStaleUserState(userId);
+          repaired = repair?.repaired === true;
         }
 
+        const paid = results.filter(item =>
+          item?.success === true
+        );
 
-        const successful =
-          results.filter(
-            item =>
-              item?.success === true
-          );
+        const alreadyPaid = results.filter(item =>
+          item?.alreadyCompleted === true
+        );
 
-
-        const alreadyPaid =
-          results.filter(
-            item =>
-              item?.alreadyCompleted === true
-          );
-
-
-        if (
-          successful.length ||
-          repaired
-        ) {
-
-          await ccusVIPRefreshUserUI();
-
-          try {
-
-            ccusVIPRenderLevels(
-              ccusVIPLevelsList
-            );
-
-          } catch (error) {
-
-            console.warn(
-              "VIP cards refresh failed:",
-              error
-            );
-
-          }
-
+        if (paid.length || repaired) {
+          await refreshUserUI();
+          renderVIPLevels(vipLevels);
         }
-
 
         return {
-
-          success:
-            successful.length > 0 ||
-            repaired,
-
-          processed:
-            results.length,
-
-          paid:
-            successful.length,
-
-          alreadyPaid:
-            alreadyPaid.length,
-
+          success: paid.length > 0 || repaired,
+          processed: results.length,
+          paid: paid.length,
+          alreadyPaid: alreadyPaid.length,
           repaired,
-
-          active:
-            !!activeOrder,
-
-          activeOrderId:
-            activeOrder?.id || null,
-
+          active: !!activeOrder,
+          activeOrderId: activeOrder?.id || null,
           results
-
         };
 
       } catch (error) {
-
-        console.error(
-          "❌ CCUS VIP expiry recovery error:",
-          error
-        );
+        console.error("VIP expiry processing error:", error);
 
         return {
-
-          success:
-            false,
-
-          reason:
-            "error",
-
+          success: false,
+          reason: "error",
           error
-
         };
 
       } finally {
-
-        ccusVIPState.expiryPromise =
-          null;
-
+        state.expiryPromise = null;
       }
-
     })();
 
-  return ccusVIPState.expiryPromise;
+    return state.expiryPromise;
+  }
 
-}
+  /* =======================================================
+     RENDER VIP LEVELS
+     ======================================================= */
 
-
-/* =========================================================
-   RENDER VIP LEVELS
-   IMPORTANT:
-   DO NOT USE STALE user.vipLevel TO DISABLE BUTTON.
-   BUY FUNCTION WILL CHECK REAL ORDER.
-   ========================================================= */
-
-function ccusVIPRenderLevels(
-  levels
-) {
-
-  const container =
-    document.querySelector(
+  function renderVIPLevels(levels) {
+    const container = document.querySelector(
       "#vipContainer, .vip-container"
     );
 
-  if (!container) {
-    return;
-  }
+    if (!container) return;
 
-  if (
-    !Array.isArray(levels) ||
-    !levels.length
-  ) {
+    if (!Array.isArray(levels) || !levels.length) {
+      container.innerHTML = `
+        <div style="text-align:center;padding:25px;color:#666">
+          <h3>No VIP Packages Available</h3>
+        </div>
+      `;
 
-    container.innerHTML = `
+      renderCompanySalary();
+      return;
+    }
+
+    container.innerHTML = levels.map((vip, index) => `
       <div
+        class="simple-card vip-card"
+        data-vip-id="${escapeHtml(vip.id)}"
         style="
-          text-align:center;
-          padding:25px;
-          color:#666;
+          border:1px solid #f0a500;
+          margin-bottom:15px;
+          padding:15px;
+          border-radius:12px;
+          background:#fff;
+          box-shadow:0 2px 8px rgba(0,0,0,.05);
         "
       >
-        <h3>
-          No VIP Packages Available
-        </h3>
-      </div>
-    `;
+        <div style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:10px;
+          margin-bottom:8px;
+        ">
+          <div>
+            <h3 style="margin:0;color:#f0a500;font-size:17px">
+              👑 ${escapeHtml(vip.name)}
+            </h3>
 
-    ccusVIPRenderCompanySalary();
-
-    return;
-
-  }
-
-
-  container.innerHTML =
-    levels
-      .map(
-        (vip, index) => {
-
-          return `
-            <div
-              class="simple-card vip-card"
-              data-vip-id="${ccusVIPEscapeHtml(
-                vip.id
-              )}"
-              style="
-                border:1px solid #f0a500;
-                margin-bottom:15px;
-                padding:15px;
-                border-radius:12px;
-                background:#fff;
-                box-shadow:
-                  0 2px 8px
-                  rgba(0,0,0,.05);
-              "
-            >
-
-              <div
-                style="
-                  display:flex;
-                  justify-content:space-between;
-                  align-items:center;
-                  gap:10px;
-                  margin-bottom:8px;
-                "
-              >
-
-                <div>
-
-                  <h3
-                    style="
-                      margin:0;
-                      color:#f0a500;
-                      font-size:17px;
-                    "
-                  >
-                    👑
-                    ${ccusVIPEscapeHtml(
-                      vip.name
-                    )}
-                  </h3>
-
-                  <div
-                    style="
-                      margin-top:3px;
-                      color:#777;
-                      font-size:12px;
-                    "
-                  >
-                    VIP Level ${index + 1}
-                  </div>
-
-                </div>
-
-                <span
-                  style="
-                    font-weight:bold;
-                    background:#fff3cd;
-                    color:#856404;
-                    padding:5px 10px;
-                    border-radius:15px;
-                    white-space:nowrap;
-                  "
-                >
-                  ETB
-                  ${ccusVIPMoney(
-                    vip.price
-                  )}
-                </span>
-
-              </div>
-
-
-              <hr
-                style="
-                  border:0;
-                  border-top:
-                    1px solid #eee;
-                  margin:10px 0;
-                "
-              />
-
-
-              <div
-                style="
-                  font-size:.95rem;
-                  line-height:1.7;
-                "
-              >
-
-                <p>
-                  <strong>
-                    Package Price:
-                  </strong>
-                  ETB
-                  ${ccusVIPMoney(
-                    vip.price
-                  )}
-                </p>
-
-                <p>
-                  <strong>
-                    Profit:
-                  </strong>
-                  ETB
-                  ${ccusVIPMoney(
-                    vip.profit
-                  )}
-                </p>
-
-                <p>
-                  <strong>
-                    Validity:
-                  </strong>
-                  ${vip.validDays}
-                  Days
-                </p>
-
-                <p>
-                  <strong>
-                    Total Return:
-                  </strong>
-                  ETB
-                  ${ccusVIPMoney(
-                    vip.price +
-                    vip.profit
-                  )}
-                </p>
-
-              </div>
-
-
-              <button
-                type="button"
-                class="primary-btn buy-vip-btn"
-                data-vip-id="${ccusVIPEscapeHtml(
-                  vip.id
-                )}"
-                style="
-                  margin-top:12px;
-                  width:100%;
-                  padding:11px;
-                  font-weight:bold;
-                  border-radius:8px;
-                "
-              >
-                Purchase
-              </button>
-
+            <div style="margin-top:3px;color:#777;font-size:12px">
+              VIP Level ${index + 1}
             </div>
-          `;
+          </div>
 
+          <span style="
+            font-weight:bold;
+            background:#fff3cd;
+            color:#856404;
+            padding:5px 10px;
+            border-radius:15px;
+            white-space:nowrap;
+          ">
+            ETB ${money(vip.price)}
+          </span>
+        </div>
+
+        <hr style="border:0;border-top:1px solid #eee;margin:10px 0">
+
+        <div style="font-size:.95rem;line-height:1.7">
+          <p><strong>Package Price:</strong> ETB ${money(vip.price)}</p>
+          <p><strong>Profit:</strong> ETB ${money(vip.profit)}</p>
+          <p><strong>Validity:</strong> ${vip.validDays} Days</p>
+          <p><strong>Total Return:</strong> ETB ${money(vip.price + vip.profit)}</p>
+        </div>
+
+        <button
+          type="button"
+          class="primary-btn buy-vip-btn"
+          data-vip-id="${escapeHtml(vip.id)}"
+          style="
+            margin-top:12px;
+            width:100%;
+            padding:11px;
+            font-weight:bold;
+            border-radius:8px;
+          "
+        >
+          Purchase
+        </button>
+      </div>
+    `).join("");
+
+    container.querySelectorAll(".buy-vip-btn").forEach(button => {
+      button.onclick = async () => {
+        const id = String(button.dataset.vipId || "");
+
+        if (!id) {
+          showMessage("VIP package not found.");
+          return;
         }
-      )
-      .join("");
 
+        await buyVIP(id);
+      };
+    });
 
-  container
-    .querySelectorAll(
-      ".buy-vip-btn"
-    )
-    .forEach(
-      button => {
-
-        button.onclick =
-          async () => {
-
-            const vip =
-              levels.find(
-                item =>
-                  String(item.id) ===
-                  String(
-                    button.dataset.vipId
-                  )
-              );
-
-            if (!vip) {
-
-              alert(
-                "VIP package not found."
-              );
-
-              return;
-
-            }
-
-            await ccusVIPBuy(
-              vip.id
-            );
-
-          };
-
-      }
-    );
-
-
-  ccusVIPRenderCompanySalary();
-
-}
-
-
-/* =========================================================
-   BUY VIP
-   ========================================================= */
-
-async function ccusVIPBuy(
-  vipId
-) {
-
-  const api =
-    ccusVIPRequireFirebase();
-
-  const user =
-    ccusVIPGetCurrentUser();
-
-  if (!user) {
-
-    alert(
-      "Please login first."
-    );
-
-    return {
-
-      success:
-        false,
-
-      reason:
-        "not-logged-in"
-
-    };
-
+    renderCompanySalary();
   }
 
+  /* =======================================================
+     BUY VIP
 
-  if (
-    ccusVIPState.submitting
-  ) {
+     Query vip_orders OUTSIDE transaction.
+     Transaction reads only user + VIP package.
+     ======================================================= */
 
-    return {
+  async function buyVIP(vipId) {
+    const api = requireFirebase();
 
-      success:
-        false,
+    const user = getCurrentUser();
 
-      reason:
-        "already-submitting"
+    if (!user || !user.uid) {
+      showMessage("Please login first.");
+      return {
+        success: false,
+        reason: "not-logged-in"
+      };
+    }
 
-    };
+    if (state.submitting) {
+      return {
+        success: false,
+        reason: "already-submitting"
+      };
+    }
 
-  }
-
-
-  ccusVIPState.submitting =
-    true;
-
-
-  try {
-
-    /* -----------------------------------------
-       STEP 1
-       RECOVER EXPIRED VIP FIRST
-       ----------------------------------------- */
-
-    await ccusVIPProcessExpired();
-
-
-    /* -----------------------------------------
-       STEP 2
-       RELOAD USER
-       ----------------------------------------- */
+    state.submitting = true;
 
     try {
+      /* STEP 1: PROCESS EXPIRED VIP */
 
-      if (
-        typeof loadUserData ===
-        "function"
-      ) {
+      await processExpiredVIP();
 
-        await loadUserData();
+      /* STEP 2: FIND REAL ACTIVE ORDER */
 
-      }
+      let orders = await findUserOrders(String(user.uid));
 
-    } catch (error) {
-
-      console.warn(
-        "VIP user refresh failed:",
-        error
+      let activeOrder = orders.find(item =>
+        isActiveUnpaidOrder(item.data, Date.now())
       );
-
-    }
-
-
-    /* -----------------------------------------
-       STEP 3
-       FIND REAL ACTIVE ORDER
-       OUTSIDE TRANSACTION
-       ----------------------------------------- */
-
-    let orders =
-      await ccusVIPFindUserOrders(
-        String(user.uid)
-      );
-
-
-    let activeOrder =
-      orders.find(
-        item =>
-          ccusVIPIsActiveUnpaidOrder(
-            item.data,
-            Date.now()
-          )
-      );
-
-
-    if (activeOrder) {
-
-      const expiry =
-        ccusVIPCalculateExpiry(
-          activeOrder.data
-        );
-
-      const expiryText =
-        expiry
-          ? expiry.toLocaleString()
-          : "the scheduled expiry time";
-
-      throw new Error(
-        "VIP is already active. It expires on " +
-        expiryText +
-        "."
-      );
-
-    }
-
-
-    /* -----------------------------------------
-       STEP 4
-       CHECK AGAIN FOR EXPIRED UNPAID
-       ----------------------------------------- */
-
-    const expiredUnpaid =
-      orders.filter(
-        item => {
-
-          const data =
-            item.data || {};
-
-          if (
-            data.payoutCompleted === true
-          ) {
-
-            return false;
-
-          }
-
-          if (
-            ccusVIPIsNonPayableStatus(
-              data.status
-            )
-          ) {
-
-            return false;
-
-          }
-
-          const expiry =
-            ccusVIPCalculateExpiry(
-              data
-            );
-
-          return (
-            expiry &&
-            expiry.getTime() <=
-            Date.now()
-          );
-
-        }
-      );
-
-
-    if (
-      expiredUnpaid.length
-    ) {
-
-      /* Try one more recovery */
-      await ccusVIPProcessExpired();
-
-      orders =
-        await ccusVIPFindUserOrders(
-          String(user.uid)
-        );
-
-
-      activeOrder =
-        orders.find(
-          item =>
-            ccusVIPIsActiveUnpaidOrder(
-              item.data,
-              Date.now()
-            )
-        );
-
 
       if (activeOrder) {
-
-        const expiry =
-          ccusVIPCalculateExpiry(
-            activeOrder.data
-          );
+        const expiry = calculateExpiry(activeOrder.data);
 
         throw new Error(
           "VIP is already active. It expires on " +
-          (
-            expiry
-              ? expiry.toLocaleString()
-              : "the scheduled expiry time"
-          ) +
+          (expiry ? expiry.toLocaleString() : "the scheduled expiry time") +
           "."
         );
-
       }
 
+      /* STEP 3: CHECK MISSED PAYOUTS AGAIN */
 
-      const stillUnpaid =
-        orders.some(
-          item => {
+      let expiredUnpaid = orders.filter(item => {
+        const data = item.data || {};
 
-            const data =
-              item.data || {};
+        if (data.payoutCompleted === true) return false;
+        if (isNonPayableStatus(data.status)) return false;
 
-            if (
-              data.payoutCompleted === true
-            ) {
+        const expiry = calculateExpiry(data);
 
-              return false;
+        return !!expiry && expiry.getTime() <= Date.now();
+      });
 
-            }
+      if (expiredUnpaid.length) {
+        await processExpiredVIP();
 
-            if (
-              ccusVIPIsNonPayableStatus(
-                data.status
-              )
-            ) {
+        orders = await findUserOrders(String(user.uid));
 
-              return false;
-
-            }
-
-            const expiry =
-              ccusVIPCalculateExpiry(
-                data
-              );
-
-            return (
-              expiry &&
-              expiry.getTime() <=
-              Date.now()
-            );
-
-          }
+        activeOrder = orders.find(item =>
+          isActiveUnpaidOrder(item.data, Date.now())
         );
 
+        if (activeOrder) {
+          const expiry = calculateExpiry(activeOrder.data);
 
-      if (stillUnpaid) {
+          throw new Error(
+            "VIP is already active. It expires on " +
+            (expiry ? expiry.toLocaleString() : "the scheduled expiry time") +
+            "."
+          );
+        }
 
-        throw new Error(
-          "Your expired VIP payout is still being processed. Please try again."
-        );
+        expiredUnpaid = orders.filter(item => {
+          const data = item.data || {};
 
+          if (data.payoutCompleted === true) return false;
+          if (isNonPayableStatus(data.status)) return false;
+
+          const expiry = calculateExpiry(data);
+
+          return !!expiry && expiry.getTime() <= Date.now();
+        });
+
+        if (expiredUnpaid.length) {
+          throw new Error(
+            "Your expired VIP payout is still being processed. Please try again."
+          );
+        }
       }
 
-    }
+      /* STEP 4: REPAIR STALE USER VIP FIELDS */
 
+      await repairStaleUserState(String(user.uid));
 
-    /* -----------------------------------------
-       STEP 5
-       CLEAN STALE USER VIP FIELDS
-       ----------------------------------------- */
+      /* REFERENCES */
 
-    await ccusVIPRepairStaleUserState(
-      String(user.uid)
-    );
-
-
-    /* -----------------------------------------
-       REFERENCES
-       ----------------------------------------- */
-
-    const userRef =
-      api.doc(
+      const userRef = api.doc(
         api.db,
         "users",
         String(user.uid)
       );
 
-    const vipRef =
-      api.doc(
+      const vipRef = api.doc(
         api.db,
         "vip_levels",
         String(vipId)
       );
 
-    const orderRef =
-      api.doc(
-        api.collection(
-          api.db,
-          "vip_orders"
-        )
+      const orderRef = api.doc(
+        api.collection(api.db, "vip_orders")
       );
 
+      /* STEP 5: TRANSACTION */
 
-    /* -----------------------------------------
-       STEP 6
-       TRANSACTION
-
-       IMPORTANT:
-       NO vip_orders QUERY INSIDE TRANSACTION.
-       ----------------------------------------- */
-
-    const result =
-      await api.runTransaction(
+      const result = await api.runTransaction(
         api.db,
         async transaction => {
-
           /* READ USER */
 
-          const userSnap =
-            await transaction.get(
-              userRef
-            );
+          const userSnap = await transaction.get(userRef);
 
-          if (
-            !userSnap.exists()
-          ) {
-
-            throw new Error(
-              "User account not found."
-            );
-
+          if (!userSnap.exists()) {
+            throw new Error("User account not found.");
           }
 
+          /* READ VIP PACKAGE */
 
-          /* READ VIP */
+          const vipSnap = await transaction.get(vipRef);
 
-          const vipSnap =
-            await transaction.get(
-              vipRef
-            );
-
-          if (
-            !vipSnap.exists()
-          ) {
-
-            throw new Error(
-              "VIP package no longer exists."
-            );
-
+          if (!vipSnap.exists()) {
+            throw new Error("VIP package no longer exists.");
           }
 
+          const userData = userSnap.data() || {};
+          const vipData = vipSnap.data() || {};
 
-          const userData =
-            userSnap.data() || {};
-
-          const vipData =
-            vipSnap.data() || {};
-
-
-          /* -------------------------------------
-             PACKAGE ACTIVE
-             ------------------------------------- */
-
-          if (
-            vipData.active === false
-          ) {
-
-            throw new Error(
-              "This VIP package is currently unavailable."
-            );
-
+          if (vipData.active === false) {
+            throw new Error("This VIP package is unavailable.");
           }
 
+          /* AUTHORITATIVE PACKAGE VALUES */
 
-          /* -------------------------------------
-             AUTHORITATIVE VALUES
-             ------------------------------------- */
-
-          const price =
-            Number(
-              vipData.price ??
-              vipData.amount ??
-              vipData.requiredDeposit ??
-              0
-            );
-
-          const profit =
-            Number(
-              vipData.profit ??
-              vipData.reward ??
-              vipData.returnProfit ??
-              0
-            );
-
-          const validDays =
-            Number(
-              vipData.validDays ??
-              vipData.durationDays ??
-              vipData.days ??
-              0
-            );
-
-          const vipName =
-            String(
-              vipData.displayName ||
-              vipData.name ||
-              (
-                vipData.level !== undefined
-                  ? `VIP ${vipData.level}`
-                  : "VIP"
-              )
-            );
-
-
-          /* -------------------------------------
-             VALIDATE
-             ------------------------------------- */
-
-          if (
-            !Number.isFinite(price) ||
-            price <= 0
-          ) {
-
-            throw new Error(
-              "Invalid VIP price."
-            );
-
-          }
-
-          if (
-            !Number.isFinite(profit) ||
-            profit < 0
-          ) {
-
-            throw new Error(
-              "Invalid VIP profit."
-            );
-
-          }
-
-          if (
-            !Number.isFinite(validDays) ||
-            validDays <= 0
-          ) {
-
-            throw new Error(
-              "Invalid VIP validity period."
-            );
-
-          }
-
-
-          /* -------------------------------------
-             USER BALANCE
-             ------------------------------------- */
-
-          const balance =
-            Number(
-              userData.totalBalance ??
-              0
-            );
-
-          if (
-            !Number.isFinite(balance)
-          ) {
-
-            throw new Error(
-              "Invalid account balance."
-            );
-
-          }
-
-
-          /* -------------------------------------
-             BALANCE CHECK
-             ------------------------------------- */
-
-          if (
-            balance < price
-          ) {
-
-            throw new Error(
-              `Insufficient balance! Costs ETB ${ccusVIPMoney(
-                price
-              )}, but your balance is ETB ${ccusVIPMoney(
-                balance
-              )}.`
-            );
-
-          }
-
-
-          /* -------------------------------------
-             PURCHASE
-             ------------------------------------- */
-
-          const newBalance =
-            balance -
-            price;
-
-          const startedAt =
-            new Date();
-
-          const expiresAt =
-            new Date(
-              startedAt.getTime() +
-              validDays *
-              24 *
-              60 *
-              60 *
-              1000
-            );
-
-
-          /* -------------------------------------
-             USER UPDATE
-
-             totalRecharge is intentionally absent.
-             ------------------------------------- */
-
-          transaction.update(
-            userRef,
-            {
-
-              totalBalance:
-                newBalance,
-
-              vipLevel:
-                vipName,
-
-              vipLevelId:
-                String(vipId),
-
-              vipExpiresAt:
-                expiresAt,
-
-              lastVipOrderId:
-                orderRef.id,
-
-              vipUpdatedAt:
-                ccusVIPServerTime(),
-
-              updatedAt:
-                ccusVIPServerTime()
-
-            }
+          const price = Number(
+            vipData.price ??
+            vipData.amount ??
+            vipData.requiredDeposit ??
+            0
           );
 
-
-          /* -------------------------------------
-             CREATE ORDER
-             ------------------------------------- */
-
-          transaction.set(
-            orderRef,
-            {
-
-              userId:
-                String(user.uid),
-
-              userName:
-                userData.fullName ||
-                user.displayName ||
-                "User",
-
-              userEmail:
-                user.email ||
-                "",
-
-              vipId:
-                String(vipId),
-
-              vipName:
-                vipName,
-
-              price:
-                price,
-
-              profit:
-                profit,
-
-              payoutAmount:
-                price +
-                profit,
-
-              validDays:
-                validDays,
-
-              startedAt:
-                startedAt,
-
-              expiresAt:
-                expiresAt,
-
-              status:
-                "active",
-
-              payoutCompleted:
-                false,
-
-              createdAt:
-                ccusVIPServerTime(),
-
-              updatedAt:
-                ccusVIPServerTime()
-
-            }
+          const profit = Number(
+            vipData.profit ??
+            vipData.reward ??
+            vipData.returnProfit ??
+            0
           );
 
+          const validDays = Number(
+            vipData.validDays ??
+            vipData.durationDays ??
+            vipData.days ??
+            0
+          );
+
+          const vipName = String(
+            vipData.displayName ||
+            vipData.name ||
+            (vipData.level !== undefined
+              ? `VIP ${vipData.level}`
+              : "VIP")
+          );
+
+          if (!Number.isFinite(price) || price <= 0) {
+            throw new Error("Invalid VIP price.");
+          }
+
+          if (!Number.isFinite(profit) || profit < 0) {
+            throw new Error("Invalid VIP profit.");
+          }
+
+          if (!Number.isFinite(validDays) || validDays <= 0) {
+            throw new Error("Invalid VIP validity period.");
+          }
+
+          const balance = Number(userData.totalBalance ?? 0);
+
+          if (!Number.isFinite(balance) || balance < 0) {
+            throw new Error("Invalid account balance.");
+          }
+
+          if (balance < price) {
+            throw new Error(
+              `Insufficient balance! Costs ETB ${money(price)}, ` +
+              `but your balance is ETB ${money(balance)}.`
+            );
+          }
+
+          const newBalance = balance - price;
+
+          const startedAt = new Date();
+
+          const expiresAt = new Date(
+            startedAt.getTime() +
+            validDays * 24 * 60 * 60 * 1000
+          );
+
+          /* USER UPDATE
+             totalRecharge intentionally NOT modified. */
+
+          transaction.update(userRef, {
+            totalBalance: newBalance,
+            vipLevel: vipName,
+            vipLevelId: String(vipId),
+            vipExpiresAt: expiresAt,
+            lastVipOrderId: orderRef.id,
+            vipUpdatedAt: serverTime(),
+            updatedAt: serverTime()
+          });
+
+          /* CREATE ORDER */
+
+          transaction.set(orderRef, {
+            userId: String(user.uid),
+            userName:
+              userData.fullName ||
+              user.displayName ||
+              "User",
+            userEmail: user.email || "",
+
+            vipId: String(vipId),
+            vipName,
+
+            price,
+            profit,
+            payoutAmount: price + profit,
+            validDays,
+
+            startedAt,
+            expiresAt,
+
+            status: "active",
+            payoutCompleted: false,
+
+            createdAt: serverTime(),
+            updatedAt: serverTime()
+          });
 
           return {
-
-            success:
-              true,
-
-            orderId:
-              orderRef.id,
-
-            vipName:
-              vipName,
-
-            price:
-              price,
-
-            profit:
-              profit,
-
-            validDays:
-              validDays,
-
-            startedAt:
-              startedAt,
-
-            expiresAt:
-              expiresAt,
-
-            oldBalance:
-              balance,
-
-            newBalance:
-              newBalance
-
+            success: true,
+            orderId: orderRef.id,
+            vipName,
+            price,
+            profit,
+            validDays,
+            startedAt,
+            expiresAt,
+            oldBalance: balance,
+            newBalance
           };
-
         }
       );
 
+      if (result.success) {
+        showMessage(
+          `${result.vipName} purchased successfully.\n\n` +
+          `Price: ETB ${money(result.price)}\n` +
+          `Profit: ETB ${money(result.profit)}\n` +
+          `Validity: ${result.validDays} days\n\n` +
+          `VIP expires on:\n${result.expiresAt.toLocaleString()}`
+        );
+      }
 
-    /* -----------------------------------------
-       SUCCESS
-       ----------------------------------------- */
+      await refreshUserUI();
+      renderVIPLevels(vipLevels);
 
-    if (
-      result?.success
-    ) {
-
-      alert(
-        `${result.vipName} purchased successfully.\n\n` +
-        `Price: ETB ${ccusVIPMoney(
-          result.price
-        )}\n` +
-        `Profit: ETB ${ccusVIPMoney(
-          result.profit
-        )}\n` +
-        `Validity: ${result.validDays} days.\n\n` +
-        `VIP will expire on:\n` +
-        `${result.expiresAt.toLocaleString()}`
-      );
-
-    }
-
-
-    await ccusVIPRefreshUserUI();
-
-
-    try {
-
-      ccusVIPRenderLevels(
-        ccusVIPLevelsList
-      );
+      return result;
 
     } catch (error) {
+      console.error("CCUS VIP purchase error:", error);
 
-      console.warn(
-        "VIP render refresh failed:",
+      if (error?.code === "permission-denied") {
+        showMessage(
+          "VIP purchase was blocked by Firestore Security Rules."
+        );
+      } else {
+        showMessage(
+          error?.message || "VIP purchase failed."
+        );
+      }
+
+      return {
+        success: false,
+        reason: "error",
         error
-      );
+      };
 
+    } finally {
+      state.submitting = false;
     }
-
-
-    return result;
-
-
-  } catch (error) {
-
-    console.error(
-      "❌ CCUS VIP purchase error:",
-      error
-    );
-
-
-    if (
-      error?.code ===
-      "permission-denied"
-    ) {
-
-      alert(
-        "VIP purchase was blocked by Firestore Security Rules."
-      );
-
-    } else {
-
-      alert(
-        error?.message ||
-        "VIP purchase failed."
-      );
-
-    }
-
-
-    return {
-
-      success:
-        false,
-
-      reason:
-        "error",
-
-      error
-
-    };
-
-
-  } finally {
-
-    ccusVIPState.submitting =
-      false;
-
   }
 
-}
+  /* =======================================================
+     COMPANY SALARY STRUCTURE
+     ======================================================= */
+
+  const companySalary = [
+    {
+      level: "L1",
+      title: "Team Leader",
+      requirement: "10 A-level employees + 15 ABC level",
+      salary: 2000
+    },
+    {
+      level: "L2",
+      title: "Reserve Manager",
+      requirement: "15 A-level + 50 ABC employees",
+      salary: 6000
+    },
+    {
+      level: "L3",
+      title: "Senior Trainee Manager",
+      requirement: "150+ ABC employees",
+      salary: 15000
+    },
+    {
+      level: "L4",
+      title: "Marketing Manager",
+      requirement: "240+ team members",
+      salary: 25000
+    },
+    {
+      level: "L5",
+      title: "Marketing General Manager",
+      requirement: "550+ team members",
+      salary: 75000
+    },
+    {
+      level: "L6",
+      title: "Regional Manager",
+      requirement: "1,200+ team members",
+      salary: 250000
+    },
+    {
+      level: "L7",
+      title: "Regional General Manager",
+      requirement: "2,000+ team members",
+      salary: 750000
+    },
+    {
+      level: "L8",
+      title: "City Partner",
+      requirement: "3,000+ team members",
+      salary: 1500000
+    }
+  ];
+
+  function renderCompanySalary() {
+    const body = document.querySelector(
+      "#companySalaryTableBody, #salaryTableBody, #teamSalaryTableBody"
+    );
+
+    if (!body) return;
+
+    body.innerHTML = companySalary.map(item => `
+      <tr>
+        <td>${escapeHtml(item.level)}</td>
+        <td>${escapeHtml(item.title)}</td>
+        <td>${escapeHtml(item.requirement)}</td>
+        <td>ETB ${money(item.salary)}</td>
+      </tr>
+    `).join("");
+  }
+
+  /* =======================================================
+     INCOME LEVELS FROM FIRESTORE
+     ======================================================= */
+
+  function loadIncomeLevels() {
+    const api = requireFirebase();
+
+    const body = document.querySelector(
+      "#incomeLevelsTableBody"
+    );
+
+    if (!body) return;
+
+    stopListener("incomeLevels");
+
+    body.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align:center">
+          Loading income levels...
+        </td>
+      </tr>
+    `;
+
+    const unsubscribe = api.onSnapshot(
+      api.collection(api.db, "incomeLevels"),
+
+      snapshot => {
+        incomeLevels = [];
+
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data() || {};
+
+          if (data.active === false) return;
+
+          incomeLevels.push({
+            id: docSnap.id,
+            name: data.name || data.title || docSnap.id,
+            requirement: data.requirement || data.description || "",
+            amount: Number(data.amount ?? data.salary ?? data.reward ?? 0),
+            order: Number(data.order ?? data.displayOrder ?? 9999)
+          });
+        });
+
+        incomeLevels.sort((a, b) => a.order - b.order);
+
+        renderIncomeLevels();
+      },
+
+      error => {
+        console.error("Income levels error:", error);
+
+        body.innerHTML = `
+          <tr>
+            <td colspan="5">Unable to load income levels.</td>
+          </tr>
+        `;
+      }
+    );
+
+    state.listeners.incomeLevels = unsubscribe;
+
+    W.unsubs = W.unsubs || {};
+    W.unsubs.incomeLevels = unsubscribe;
+  }
+
+  function renderIncomeLevels() {
+    const body = document.querySelector(
+      "#incomeLevelsTableBody"
+    );
+
+    if (!body) return;
+
+    if (!incomeLevels.length) {
+      body.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align:center">
+            No income levels available.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    body.innerHTML = incomeLevels.map((item, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(item.name)}</td>
+        <td>${escapeHtml(item.requirement)}</td>
+        <td>ETB ${money(item.amount)}</td>
+        <td>Active</td>
+      </tr>
+    `).join("");
+  }
+
+  /* =======================================================
+     AUTOMATIC EXPIRY CHECKER
+     ======================================================= */
+
+  function startExpiryChecker() {
+    if (state.expiryInterval) {
+      clearInterval(state.expiryInterval);
+    }
+
+    /* Check immediately */
+
+    processExpiredVIP();
+
+    /* Check every 60 seconds */
+
+    state.expiryInterval = setInterval(() => {
+      if (getCurrentUser()) {
+        processExpiredVIP();
+      }
+    }, 60000);
+
+    /* Check when user returns to tab */
+
+    if (!state.visibilityStarted) {
+      state.visibilityStarted = true;
+
+      document.addEventListener("visibilitychange", () => {
+        if (
+          document.visibilityState === "visible" &&
+          getCurrentUser()
+        ) {
+          processExpiredVIP();
+        }
+      });
+
+      window.addEventListener("focus", () => {
+        if (getCurrentUser()) {
+          processExpiredVIP();
+        }
+      });
+    }
+  }
+
+  /* =======================================================
+     INITIALIZE
+     ======================================================= */
+
+  function initializeCCUSVIP() {
+    if (state.initialized) {
+      startExpiryChecker();
+      return;
+    }
+
+    state.initialized = true;
+
+    try {
+      loadVIPLevels();
+    } catch (error) {
+      console.error("VIP initialization error:", error);
+    }
+
+    try {
+      loadIncomeLevels();
+    } catch (error) {
+      console.warn("Income levels initialization error:", error);
+    }
+
+    renderCompanySalary();
+
+    startExpiryChecker();
+
+    console.log("CCUS VIP System initialized.");
+  }
+
+  /* =======================================================
+     PUBLIC API
+     ======================================================= */
+
+  W.buyVIP = buyVIP;
+  W.loadVIPLevels = loadVIPLevels;
+  W.renderVIPLevels = renderVIPLevels;
+
+  W.completeExpiredVIP = completeExpiredVIP;
+  W.processExpiredVIPForCurrentUser = processExpiredVIP;
+
+  W.loadIncomeLevels = loadIncomeLevels;
+  W.renderIncomeLevels = renderIncomeLevels;
+
+  W.renderCompanySalaryStructure = renderCompanySalary;
+  W.initializeCCUSVIP = initializeCCUSVIP;
+
+  /* Debug API */
+
+  W.ccusVIPDebug = {
+    findUserOrders,
+    findCurrentOrder,
+    calculateExpiry,
+    isActiveUnpaidOrder,
+    completeExpiredVIP,
+    processExpiredVIP,
+    repairStaleUserState,
+    getLevels: () => vipLevels,
+    getIncomeLevels: () => incomeLevels
+  };
+
+  /* =======================================================
+     AUTO INITIALIZATION
+     ======================================================= */
+
+  if (document.readyState === "loading") {
+    document.addEventListener(
+      "DOMContentLoaded",
+      initializeCCUSVIP,
+      { once: true }
+    );
+  } else {
+    initializeCCUSVIP();
+  }
+
+})();
 
 
 /* =========================================================
